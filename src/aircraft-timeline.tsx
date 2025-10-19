@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Filter, Info, Plane, Upload } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, Filter, Info, Plane, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const AircraftTimeline = () => {
@@ -8,6 +8,8 @@ const AircraftTimeline = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [hoveredAircraft, setHoveredAircraft] = useState(null);
   const [selectedAircraft, setSelectedAircraft] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   // Custom scrollbar styles
   const scrollbarStyles = `
@@ -45,37 +47,56 @@ const AircraftTimeline = () => {
     setSelectedAircraft(aircraft);
     // No longer fetching - just show the panel with links
   };
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
 
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer);
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rawData = XLSX.utils.sheet_to_json(firstSheet);
-      
-      const cleaned = rawData
-        .filter(a => a.Typenaam && a['Jaar invoering'])
-        .map(a => ({
-          name: a.Typenaam,
-          user: a.Gebruikers || 'Onbekend',
-          startYear: a['Jaar invoering'],
-          endYear: a['Jaar uit dienst'] || 2025,
-          totalCount: a.Totaal || 0,
-          klu: a['Aantal Klu'] || 0,
-          mld: a['Aantal MLD'] || 0,
-          mlknil: a['Aantal MLKNIL'] || 0,
-          notes: a.Bijzonderheden || '',
-          museum: a['Wrak - museaal - vliegend'] || ''
-        }));
-      
-      setAircraftData(cleaned);
-    } catch (error) {
-      console.error('Error loading file:', error);
-      alert('Fout bij het laden van het bestand. Controleer of het een geldig Excel bestand is.');
-    }
+  // Process Excel data from ArrayBuffer
+  const processExcelData = (arrayBuffer) => {
+    const workbook = XLSX.read(arrayBuffer);
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawData = XLSX.utils.sheet_to_json(firstSheet);
+
+    const cleaned = rawData
+      .filter(a => a.Typenaam && a['Jaar invoering'])
+      .map(a => ({
+        name: a.Typenaam,
+        user: a.Gebruikers || 'Onbekend',
+        startYear: a['Jaar invoering'],
+        endYear: a['Jaar uit dienst'] || 2025,
+        totalCount: a.Totaal || 0,
+        klu: a['Aantal Klu'] || 0,
+        mld: a['Aantal MLD'] || 0,
+        mlknil: a['Aantal MLKNIL'] || 0,
+        notes: a.Bijzonderheden || '',
+        museum: a['Wrak - museaal - vliegend'] || ''
+      }));
+
+    return cleaned;
   };
+
+  // Auto-load data on component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        setLoadError(null);
+
+        const response = await fetch('/data.xlsx');
+        if (!response.ok) {
+          throw new Error('Kon het Excel bestand niet laden. Zorg ervoor dat data.xlsx in de public folder staat.');
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const data = processExcelData(arrayBuffer);
+        setAircraftData(data);
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setLoadError(error.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   // Color mapping for different users
   const getUserColor = (user) => {
@@ -158,35 +179,46 @@ const AircraftTimeline = () => {
     };
   }, [filteredData]);
 
-  // Show upload screen if no data
-  if (aircraftData.length === 0) {
+  // Show loading screen
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-slate-800/50 backdrop-blur rounded-2xl p-8 border border-slate-700 text-center">
-          <Plane className="w-20 h-20 text-orange-400 mx-auto mb-6 animate-bounce" />
+          <Loader2 className="w-20 h-20 text-blue-400 mx-auto mb-6 animate-spin" />
           <h2 className="text-3xl font-bold text-white mb-4">
             Nederlandse Militaire Luchtvaart
           </h2>
           <p className="text-slate-300 mb-6">
-            Upload het Excel bestand om de interactieve tijdlijn te zien
+            Data wordt geladen...
           </p>
-          
-          <label className="block">
-            <div className="flex items-center justify-center gap-3 px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer transition-all duration-200 hover:scale-105">
-              <Upload className="w-5 h-5" />
-              <span className="font-semibold">Upload Excel Bestand</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error screen
+  if (loadError || aircraftData.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-slate-800/50 backdrop-blur rounded-2xl p-8 border border-slate-700 text-center">
+          <Plane className="w-20 h-20 text-orange-400 mx-auto mb-6" />
+          <h2 className="text-3xl font-bold text-white mb-4">
+            Nederlandse Militaire Luchtvaart
+          </h2>
+
+          {loadError ? (
+            <div className="mb-6">
+              <p className="text-red-400 mb-2">Fout bij het laden van data</p>
+              <p className="text-slate-400 text-sm">{loadError}</p>
+              <p className="text-slate-500 text-xs mt-4">
+                Zorg ervoor dat 'data.xlsx' aanwezig is in de public folder.
+              </p>
             </div>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
-          
-          <p className="text-slate-400 text-sm mt-4">
-            Ondersteunde formaten: .xlsx, .xls
-          </p>
+          ) : (
+            <p className="text-slate-300 mb-6">
+              Geen data beschikbaar
+            </p>
+          )}
         </div>
       </div>
     );
@@ -207,20 +239,6 @@ const AircraftTimeline = () => {
             </div>
             <p className="text-slate-300 text-lg">Interactieve tijdlijn 1817-2025</p>
           </div>
-          
-          {/* Re-upload button */}
-          <label className="cursor-pointer">
-            <div className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
-              <Upload className="w-4 h-4" />
-              <span className="text-sm">Nieuw bestand</span>
-            </div>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
         </div>
       </div>
 
