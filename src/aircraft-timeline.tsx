@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Filter, Info, Plane, Loader2 } from 'lucide-react';
+import { Search, Filter, Info, Plane, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const AircraftTimeline = () => {
@@ -10,6 +10,9 @@ const AircraftTimeline = () => {
   const [selectedAircraft, setSelectedAircraft] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(1.8);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const timelineContainerRef = React.useRef(null);
 
   // Custom scrollbar styles
   const scrollbarStyles = `
@@ -98,6 +101,56 @@ const AircraftTimeline = () => {
     loadData();
   }, []);
 
+  // Auto-scroll to 1910 on mount
+  useEffect(() => {
+    if (timelineContainerRef.current && aircraftData.length > 0) {
+      // Calculate position for 1910
+      const targetYear = 1910;
+      const scrollPercentage = ((targetYear - minYear) / yearRange);
+      const scrollPosition = scrollPercentage * timelineWidth;
+
+      // Center 1910 in the viewport
+      const containerWidth = timelineContainerRef.current.offsetWidth;
+      const centeredScroll = scrollPosition - (containerWidth * 0.3); // Show 1910 at 30% from left
+
+      timelineContainerRef.current.scrollLeft = Math.max(0, centeredScroll);
+    }
+  }, [aircraftData, zoomLevel]);
+
+  // Track scroll position for minimap
+  const handleScroll = (e) => {
+    setScrollLeft(e.target.scrollLeft);
+  };
+
+  // Mouse wheel zoom handler
+  const handleWheel = (e) => {
+    // Check if Ctrl key is pressed (common zoom shortcut)
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+
+      const delta = e.deltaY;
+      const zoomLevels = [1, 1.5, 2, 2.5, 3];
+      const currentIndex = zoomLevels.indexOf(zoomLevel);
+
+      if (delta < 0 && currentIndex < zoomLevels.length - 1) {
+        // Zoom in
+        setZoomLevel(zoomLevels[currentIndex + 1]);
+      } else if (delta > 0 && currentIndex > 0) {
+        // Zoom out
+        setZoomLevel(zoomLevels[currentIndex - 1]);
+      }
+    }
+  };
+
+  // Add wheel event listener
+  useEffect(() => {
+    const container = timelineContainerRef.current;
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false });
+      return () => container.removeEventListener('wheel', handleWheel);
+    }
+  }, [zoomLevel]);
+
   // Color mapping for different users
   const getUserColor = (user) => {
     const colorMap = {
@@ -144,12 +197,29 @@ const AircraftTimeline = () => {
   const minYear = 1817;
   const maxYear = 2025;
   const yearRange = maxYear - minYear;
-  const timelineHeight = Math.max(600, filteredData.length * 25);
-  const timelineWidth = 2500; // Much wider for more scrolling
+
+  // Dynamic height and width based on zoom
+  const baseWidth = 1200; // Base width at 1x zoom
+  const timelineWidth = baseWidth * zoomLevel;
+  const timelineHeight = Math.min(window.innerHeight - 500, Math.max(400, filteredData.length * 20));
 
   // Calculate position
   const getXPosition = (year) => {
     return ((year - minYear) / yearRange) * 100;
+  };
+
+  // Generate year markers based on zoom level
+  const getYearMarkers = () => {
+    let interval;
+    if (zoomLevel >= 2.5) interval = 10; // Very zoomed in - every 10 years
+    else if (zoomLevel >= 1.5) interval = 20; // Medium zoom - every 20 years
+    else interval = 30; // Zoomed out - every 30 years
+
+    const markers = [];
+    for (let year = Math.ceil(minYear / interval) * interval; year <= maxYear; year += interval) {
+      markers.push(year);
+    }
+    return markers;
   };
 
   // Statistics
@@ -225,95 +295,106 @@ const AircraftTimeline = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white p-6">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white flex flex-col">
       <style>{scrollbarStyles}</style>
       {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <Plane className="w-10 h-10 text-orange-400" />
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-orange-400 bg-clip-text text-transparent">
-                Nederlandse Militaire Luchtvaart
-              </h1>
-            </div>
-            <p className="text-slate-300 text-lg">Interactieve tijdlijn 1817-2025</p>
-          </div>
+      <div className="max-w-7xl mx-auto w-full px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Plane className="w-6 h-6 text-orange-400" />
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-orange-400 bg-clip-text text-transparent">
+            Nederlandse Militaire Luchtvaart
+          </h1>
+          <span className="text-slate-400 text-sm ml-2">1817-2025</span>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="max-w-7xl mx-auto mb-6 bg-slate-800/50 backdrop-blur rounded-xl p-4 border border-slate-700">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Zoek vliegtuigtype..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+      <div className="max-w-7xl mx-auto w-full px-4 pb-2">
+        <div className="bg-slate-800/50 backdrop-blur rounded-lg p-2 border border-slate-700">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Zoek..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-2 py-1.5 text-sm bg-slate-700/50 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
 
-          {/* User Filter */}
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <select
-              value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
-            >
-              {uniqueUsers.map(user => (
-                <option key={user} value={user}>{user}</option>
+            {/* User Filter */}
+            <div className="relative">
+              <Filter className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="pl-8 pr-8 py-1.5 text-sm bg-slate-700/50 border border-slate-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
+              >
+                {uniqueUsers.map(user => (
+                  <option key={user} value={user}>{user}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Stats inline */}
+            <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-1">
+                <span className="font-bold text-blue-400">{stats.types}</span>
+                <span className="text-slate-400">types</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-bold text-orange-400">{stats.total}</span>
+                <span className="text-slate-400">totaal</span>
+              </div>
+            </div>
+
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-1">
+              <ZoomOut className="w-4 h-4 text-slate-400" />
+              {[1, 1.5, 2, 2.5, 3].map(level => (
+                <button
+                  key={level}
+                  onClick={() => setZoomLevel(level)}
+                  className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
+                    zoomLevel === level
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  {level}x
+                </button>
               ))}
-            </select>
+              <ZoomIn className="w-4 h-4 text-slate-400" />
+              <span className="text-[10px] text-slate-500 ml-1">Ctrl+scroll</span>
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* Statistics */}
-      <div className="max-w-7xl mx-auto mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-blue-500/20 backdrop-blur rounded-lg p-4 border border-blue-500/30">
-          <div className="text-3xl font-bold text-blue-400">{stats.types}</div>
-          <div className="text-sm text-slate-300">Vliegtuigtypen</div>
-        </div>
-        <div className="bg-orange-500/20 backdrop-blur rounded-lg p-4 border border-orange-500/30">
-          <div className="text-3xl font-bold text-orange-400">{stats.total}</div>
-          <div className="text-sm text-slate-300">Totaal Toestellen</div>
-        </div>
-        <div className="bg-purple-500/20 backdrop-blur rounded-lg p-4 border border-purple-500/30">
-          <div className="text-3xl font-bold text-purple-400">{stats.withMuseum}</div>
-          <div className="text-sm text-slate-300">Met Museumstatus</div>
-        </div>
-        <div className="bg-green-500/20 backdrop-blur rounded-lg p-4 border border-green-500/30">
-          <div className="text-3xl font-bold text-green-400">{stats.averageService}</div>
-          <div className="text-sm text-slate-300">Gem. Dienstjaren</div>
         </div>
       </div>
 
       {/* Timeline */}
-      <div className="max-w-7xl mx-auto bg-slate-800/30 backdrop-blur rounded-xl p-6 border border-slate-700 overflow-hidden">
-        <div className="overflow-x-auto custom-scrollbar">
-          <div className="relative" style={{ width: `${timelineWidth}px`, height: `${timelineHeight}px` }}>
-            {/* Year markers */}
-            <div className="absolute top-0 left-0 right-0 h-12 border-b border-slate-600">
-              {[1820, 1850, 1880, 1910, 1940, 1970, 2000, 2020].map(year => (
-                <div
-                  key={year}
-                  className="absolute top-0 bottom-0 border-l border-slate-600/50"
-                  style={{ left: `${getXPosition(year)}%` }}
-                >
-                  <span className="absolute -top-1 left-2 text-xs text-slate-400 font-medium">
-                    {year}
-                  </span>
-                </div>
-              ))}
-            </div>
+      <div className="max-w-7xl mx-auto w-full px-4 flex-1 flex flex-col min-h-0 mb-52">
+        <div className="bg-slate-800/30 backdrop-blur rounded-xl border border-slate-700 overflow-hidden flex-1 flex flex-col">
+          <div className="overflow-x-auto overflow-y-auto custom-scrollbar flex-1" ref={timelineContainerRef} onScroll={handleScroll}>
+            <div className="relative" style={{ width: `${timelineWidth}px`, height: `${timelineHeight}px` }}>
+              {/* Year markers - STICKY */}
+              <div className="sticky top-0 left-0 right-0 h-8 border-b border-slate-600 bg-slate-800/95 backdrop-blur z-10">
+                {getYearMarkers().map(year => (
+                  <div
+                    key={year}
+                    className="absolute top-0 bottom-0 border-l border-slate-600/50"
+                    style={{ left: `${getXPosition(year)}%` }}
+                  >
+                    <span className="absolute top-1 left-1 text-[10px] text-slate-300 font-semibold bg-slate-800/80 px-1 rounded">
+                      {year}
+                    </span>
+                  </div>
+                ))}
+              </div>
 
             {/* Aircraft bars */}
-            <div className="absolute top-14 left-0 right-0">
+            <div className="absolute top-8 left-0 right-0">
               {filteredData.map((aircraft, index) => {
                 const startX = getXPosition(aircraft.startYear);
                 const endX = getXPosition(aircraft.endYear);
@@ -414,31 +495,91 @@ const AircraftTimeline = () => {
           </div>
         </div>
       </div>
+      </div>
 
-      {/* Legend */}
-      <div className="max-w-7xl mx-auto mt-6 bg-slate-800/30 backdrop-blur rounded-xl p-4 border border-slate-700">
-        <div className="flex items-center gap-2 mb-3">
-          <Info className="w-5 h-5 text-blue-400" />
-          <span className="font-semibold">Legenda</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {[
-            { label: 'KLu (Koninklijke Luchtmacht)', color: '#0055A4' },
-            { label: 'MLD (Marine Luchtvaartdienst)', color: '#003DA5' },
-            { label: 'MLKNIL (ML Koninklijk Nederlands-Indië)', color: '#FF6B35' },
-            { label: 'LVA (Luchtvaartafdeling)', color: '#8B4513' },
-            { label: 'LSK (Luchtvaart Brigade)', color: '#4A7C59' }
-          ].map(item => (
-            <div key={item.label} className="flex items-center gap-2">
-              <div
-                className="w-4 h-4 rounded"
-                style={{ backgroundColor: item.color }}
-              />
-              <span className="text-sm text-slate-300">{item.label}</span>
+      {/* Fixed Legend & Minimap at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-lg border-t border-slate-700 shadow-2xl z-40">
+        <div className="max-w-7xl mx-auto p-4">
+          {/* Minimap */}
+          <div className="mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Info className="w-4 h-4 text-blue-400" />
+              <span className="font-semibold text-sm">Timeline Overzicht</span>
             </div>
-          ))}
+            <div className="relative h-12 bg-slate-800/50 rounded-lg overflow-hidden border border-slate-600">
+              {/* Background bars - all aircraft */}
+              <div className="absolute inset-0">
+                {aircraftData.map((aircraft, index) => {
+                  const startX = getXPosition(aircraft.startYear);
+                  const endX = getXPosition(aircraft.endYear);
+                  const width = endX - startX;
+                  const color = getUserColor(aircraft.user);
+
+                  return (
+                    <div
+                      key={`minimap-${aircraft.name}-${index}`}
+                      className="absolute top-0 bottom-0 opacity-40"
+                      style={{
+                        left: `${startX}%`,
+                        width: `${width}%`,
+                        backgroundColor: color
+                      }}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Viewport indicator */}
+              {timelineContainerRef.current && (
+                <div
+                  className="absolute top-0 bottom-0 border-2 border-blue-400 bg-blue-400/20"
+                  style={{
+                    left: `${(scrollLeft / timelineWidth) * 100}%`,
+                    width: `${(timelineContainerRef.current.offsetWidth / timelineWidth) * 100}%`
+                  }}
+                />
+              )}
+
+              {/* Year labels on minimap */}
+              <div className="absolute inset-0 pointer-events-none">
+                {[1820, 1880, 1940, 2000].map(year => (
+                  <div
+                    key={`minimap-year-${year}`}
+                    className="absolute top-0 bottom-0 border-l border-slate-500/30"
+                    style={{ left: `${getXPosition(year)}%` }}
+                  >
+                    <span className="absolute bottom-0 left-1 text-[10px] text-slate-400">
+                      {year}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-2 mb-2">
+            <Info className="w-4 h-4 text-blue-400" />
+            <span className="font-semibold text-sm">Legenda</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            {[
+              { label: 'KLu (Koninklijke Luchtmacht)', color: '#0055A4' },
+              { label: 'MLD (Marine Luchtvaartdienst)', color: '#003DA5' },
+              { label: 'MLKNIL (ML Koninklijk Nederlands-Indië)', color: '#FF6B35' },
+              { label: 'LVA (Luchtvaartafdeling)', color: '#8B4513' },
+              { label: 'LSK (Luchtvaart Brigade)', color: '#4A7C59' }
+            ].map(item => (
+              <div key={item.label} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="text-xs text-slate-300">{item.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <p className="text-slate-400 text-sm mt-4">💡 Klik op een vliegtuig voor meer informatie van ipms.nl</p>
       </div>
 
       {/* Aircraft Info Panel */}
