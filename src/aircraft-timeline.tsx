@@ -13,6 +13,7 @@ const AircraftTimeline = () => {
   const [zoomLevel, setZoomLevel] = useState(1.8);
   const [scrollLeft, setScrollLeft] = useState(0);
   const timelineContainerRef = React.useRef(null);
+  const yearMarkersRef = React.useRef(null);
 
   // Custom scrollbar styles
   const scrollbarStyles = `
@@ -30,6 +31,9 @@ const AircraftTimeline = () => {
     }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
       background: linear-gradient(90deg, #2563eb, #ea580c);
+    }
+    .year-markers-container::-webkit-scrollbar {
+      display: none;
     }
   `;
 
@@ -117,9 +121,15 @@ const AircraftTimeline = () => {
     }
   }, [aircraftData, zoomLevel]);
 
-  // Track scroll position for minimap
+  // Track scroll position for minimap and sync year markers
   const handleScroll = (e) => {
-    setScrollLeft(e.target.scrollLeft);
+    const scrollLeft = e.target.scrollLeft;
+    setScrollLeft(scrollLeft);
+
+    // Sync year markers horizontal scroll
+    if (yearMarkersRef.current) {
+      yearMarkersRef.current.scrollLeft = scrollLeft;
+    }
   };
 
   // Mouse wheel zoom handler
@@ -375,26 +385,33 @@ const AircraftTimeline = () => {
 
       {/* Timeline */}
       <div className="max-w-7xl mx-auto w-full px-4 flex-1 flex flex-col min-h-0 mb-52">
-        <div className="bg-slate-800/30 backdrop-blur rounded-xl border border-slate-700 overflow-hidden flex-1 flex flex-col">
+        <div className="bg-slate-800/30 backdrop-blur rounded-xl border border-slate-700 overflow-hidden flex-1 flex flex-col relative">
+          {/* Year markers - FIXED STICKY HEADER */}
+          <div
+            ref={yearMarkersRef}
+            className="year-markers-container sticky top-0 left-0 right-0 h-8 border-b border-slate-600 bg-slate-800/95 backdrop-blur z-20 overflow-x-hidden"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <div className="relative h-full" style={{ width: `${timelineWidth}px` }}>
+              {getYearMarkers().map(year => (
+                <div
+                  key={year}
+                  className="absolute top-0 bottom-0 border-l border-slate-600/50"
+                  style={{ left: `${getXPosition(year)}%` }}
+                >
+                  <span className="absolute top-1 left-1 text-[10px] text-slate-300 font-semibold bg-slate-800/80 px-1 rounded">
+                    {year}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Scrollable content */}
           <div className="overflow-x-auto overflow-y-auto custom-scrollbar flex-1" ref={timelineContainerRef} onScroll={handleScroll}>
             <div className="relative" style={{ width: `${timelineWidth}px`, height: `${timelineHeight}px` }}>
-              {/* Year markers - STICKY */}
-              <div className="sticky top-0 left-0 right-0 h-8 border-b border-slate-600 bg-slate-800/95 backdrop-blur z-10">
-                {getYearMarkers().map(year => (
-                  <div
-                    key={year}
-                    className="absolute top-0 bottom-0 border-l border-slate-600/50"
-                    style={{ left: `${getXPosition(year)}%` }}
-                  >
-                    <span className="absolute top-1 left-1 text-[10px] text-slate-300 font-semibold bg-slate-800/80 px-1 rounded">
-                      {year}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-            {/* Aircraft bars */}
-            <div className="absolute top-8 left-0 right-0">
+              {/* Aircraft bars */}
+              <div className="absolute top-0 left-0 right-0">
               {filteredData.map((aircraft, index) => {
                 const startX = getXPosition(aircraft.startYear);
                 const endX = getXPosition(aircraft.endYear);
@@ -402,6 +419,15 @@ const AircraftTimeline = () => {
                 const yPos = index * 25;
                 const color = getUserColor(aircraft.user);
                 const isHovered = hoveredAircraft === aircraft.name;
+
+                // Dynamic label visibility based on zoom level
+                const getMinWidth = () => {
+                  if (zoomLevel >= 2.5) return 2;  // High zoom - show almost all names
+                  if (zoomLevel >= 2) return 5;    // Medium zoom - show more names
+                  if (zoomLevel >= 1.5) return 8;  // Low-medium zoom - show medium names
+                  return 12;                        // Low zoom - only large names
+                };
+                const shouldShowLabel = isHovered || width > getMinWidth();
 
                 return (
                   <div
@@ -431,7 +457,7 @@ const AircraftTimeline = () => {
                     {/* Label */}
                     <div
                       className={`absolute left-2 top-0 text-xs font-medium transition-opacity duration-200 ${
-                        isHovered || width > 10 ? 'opacity-100' : 'opacity-0'
+                        shouldShowLabel ? 'opacity-100' : 'opacity-0'
                       }`}
                       style={{ color: 'white', textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
                     >
