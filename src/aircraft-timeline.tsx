@@ -12,11 +12,17 @@ const AircraftTimeline = () => {
   const [loadError, setLoadError] = useState(null);
   const [zoomLevel, setZoomLevel] = useState(1.8);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [containerSize, setContainerSize] = useState({ width: 1200, height: 600 });
   const timelineContainerRef = React.useRef(null);
   const yearMarkersRef = React.useRef(null);
+  const periodBannerRef = React.useRef(null);
 
   // Custom scrollbar styles
   const scrollbarStyles = `
+    .custom-scrollbar {
+      overscroll-behavior-x: contain;
+      overscroll-behavior-y: contain;
+    }
     .custom-scrollbar::-webkit-scrollbar {
       height: 12px;
     }
@@ -36,6 +42,69 @@ const AircraftTimeline = () => {
       display: none;
     }
   `;
+
+  // Historical periods for Dutch military aviation
+  const historicalPeriods = [
+    {
+      name: 'Oprichting & WO1',
+      startYear: 1913,
+      endYear: 1918,
+      color: 'rgba(239, 68, 68, 0.06)', // Red for war - more subtle
+      borderColor: 'rgba(239, 68, 68, 0.15)',
+      description: 'Oprichting Luchtvaartafdeling (LVA) en Eerste Wereldoorlog'
+    },
+    {
+      name: 'Interbellum',
+      startYear: 1918,
+      endYear: 1939,
+      color: 'rgba(34, 197, 94, 0.05)', // Green for peace - more subtle
+      borderColor: 'rgba(34, 197, 94, 0.15)',
+      description: 'Groei en ontwikkeling tussen de wereldoorlogen'
+    },
+    {
+      name: 'WO2',
+      startYear: 1939,
+      endYear: 1945,
+      color: 'rgba(220, 38, 38, 0.08)', // Dark red for war - more subtle
+      borderColor: 'rgba(220, 38, 38, 0.2)',
+      description: 'Tweede Wereldoorlog'
+    },
+    {
+      name: 'Indonesië',
+      startYear: 1945,
+      endYear: 1949,
+      color: 'rgba(249, 115, 22, 0.06)', // Orange - more subtle
+      borderColor: 'rgba(249, 115, 22, 0.15)',
+      description: 'Indonesische Onafhankelijkheidsoorlog'
+    },
+    {
+      name: 'Koude Oorlog',
+      startYear: 1949,
+      endYear: 1991,
+      color: 'rgba(59, 130, 246, 0.05)', // Blue for cold war - more subtle
+      borderColor: 'rgba(59, 130, 246, 0.15)',
+      description: 'NATO-periode en Koude Oorlog'
+    },
+    {
+      name: 'Post-Koude Oorlog',
+      startYear: 1991,
+      endYear: 2001,
+      color: 'rgba(168, 85, 247, 0.05)', // Purple - more subtle
+      borderColor: 'rgba(168, 85, 247, 0.15)',
+      description: 'Nieuwe wereldorde na val van de Berlijnse Muur'
+    },
+    {
+      name: 'Modern',
+      startYear: 2001,
+      endYear: 2025,
+      color: 'rgba(14, 165, 233, 0.05)', // Sky blue - more subtle
+      borderColor: 'rgba(14, 165, 233, 0.15)',
+      description: 'War on Terror en moderne conflicten'
+    }
+  ];
+
+  const [hoveredPeriod, setHoveredPeriod] = useState(null);
+  const [isFooterExpanded, setIsFooterExpanded] = useState(false);
 
   // Generate IPMS search link
   const getIPMSSearchLink = (aircraftName) => {
@@ -63,18 +132,33 @@ const AircraftTimeline = () => {
 
     const cleaned = rawData
       .filter(a => a.Typenaam && a['Jaar invoering'])
-      .map(a => ({
-        name: a.Typenaam,
-        user: a.Gebruikers || 'Onbekend',
-        startYear: a['Jaar invoering'],
-        endYear: a['Jaar uit dienst'] || 2025,
-        totalCount: a.Totaal || 0,
-        klu: a['Aantal Klu'] || 0,
-        mld: a['Aantal MLD'] || 0,
-        mlknil: a['Aantal MLKNIL'] || 0,
-        notes: a.Bijzonderheden || '',
-        museum: a['Wrak - museaal - vliegend'] || ''
-      }));
+      .map(a => {
+        const startYear = a['Jaar invoering'];
+        let endYear = a['Jaar uit dienst'];
+
+        // Handle "heden" or empty endYear
+        if (!endYear || endYear === 'heden' || isNaN(endYear)) {
+          endYear = 2025;
+        }
+
+        // If endYear === startYear, add 1 year minimum visibility
+        if (endYear === startYear) {
+          endYear = startYear + 1;
+        }
+
+        return {
+          name: a.Typenaam,
+          user: a.Gebruikers || 'Onbekend',
+          startYear: startYear,
+          endYear: endYear,
+          totalCount: a.Totaal || 0,
+          klu: a['Aantal Klu'] || 0,
+          mld: a['Aantal MLD'] || 0,
+          mlknil: a['Aantal MLKNIL'] || 0,
+          notes: a.Bijzonderheden || '',
+          museum: a['Wrak - museaal - vliegend'] || ''
+        };
+      });
 
     return cleaned;
   };
@@ -105,6 +189,22 @@ const AircraftTimeline = () => {
     loadData();
   }, []);
 
+  // Measure container size
+  useEffect(() => {
+    const updateSize = () => {
+      if (timelineContainerRef.current) {
+        setContainerSize({
+          width: timelineContainerRef.current.offsetWidth,
+          height: timelineContainerRef.current.offsetHeight
+        });
+      }
+    };
+
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
   // Auto-scroll to 1910 on mount
   useEffect(() => {
     if (timelineContainerRef.current && aircraftData.length > 0) {
@@ -123,12 +223,24 @@ const AircraftTimeline = () => {
 
   // Track scroll position for minimap and sync year markers
   const handleScroll = (e) => {
-    const scrollLeft = e.target.scrollLeft;
+    const container = e.target;
+    const maxScroll = container.scrollWidth - container.clientWidth;
+
+    // Prevent scrolling past the end
+    if (container.scrollLeft > maxScroll) {
+      container.scrollLeft = maxScroll;
+      return;
+    }
+
+    const scrollLeft = container.scrollLeft;
     setScrollLeft(scrollLeft);
 
-    // Sync year markers horizontal scroll
+    // Sync year markers and period banner horizontal scroll
     if (yearMarkersRef.current) {
       yearMarkersRef.current.scrollLeft = scrollLeft;
+    }
+    if (periodBannerRef.current) {
+      periodBannerRef.current.scrollLeft = scrollLeft;
     }
   };
 
@@ -190,6 +302,52 @@ const AircraftTimeline = () => {
     });
   }, [aircraftData, selectedUser, searchTerm]);
 
+  // Prevent scroll beyond boundaries using requestAnimationFrame
+  useEffect(() => {
+    const container = timelineContainerRef.current;
+    if (!container) return;
+
+    let animationFrameId = null;
+
+    const clampScroll = () => {
+      const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+
+      // Clamp horizontal scroll
+      if (container.scrollLeft < 0) {
+        container.scrollLeft = 0;
+      } else if (container.scrollLeft > maxScrollLeft) {
+        container.scrollLeft = maxScrollLeft;
+      }
+
+      // Clamp vertical scroll
+      if (container.scrollTop < 0) {
+        container.scrollTop = 0;
+      } else if (container.scrollTop > maxScrollTop) {
+        container.scrollTop = maxScrollTop;
+      }
+    };
+
+    const handleScrollClamp = () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      animationFrameId = requestAnimationFrame(clampScroll);
+    };
+
+    container.addEventListener('scroll', handleScrollClamp, { passive: true });
+
+    // Also clamp on zoom changes
+    clampScroll();
+
+    return () => {
+      container.removeEventListener('scroll', handleScrollClamp);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [zoomLevel, containerSize.width, filteredData.length]);
+
   // Get unique users for filter
   const uniqueUsers = useMemo(() => {
     const users = new Set();
@@ -209,9 +367,12 @@ const AircraftTimeline = () => {
   const yearRange = maxYear - minYear;
 
   // Dynamic height and width based on zoom
-  const baseWidth = 1200; // Base width at 1x zoom
+  const baseWidth = containerSize.width; // At 1x zoom, timeline fills container exactly
   const timelineWidth = baseWidth * zoomLevel;
-  const timelineHeight = Math.min(window.innerHeight - 500, Math.max(400, filteredData.length * 20));
+
+  // Calculate actual needed height
+  const neededHeight = filteredData.length * 25 + 30;
+  const timelineHeight = Math.max(neededHeight, containerSize.height); // Always show all aircraft
 
   // Calculate position
   const getXPosition = (year) => {
@@ -384,8 +545,62 @@ const AircraftTimeline = () => {
       </div>
 
       {/* Timeline */}
-      <div className="max-w-7xl mx-auto w-full px-4 flex-1 flex flex-col min-h-0 mb-52">
+      <div className="w-full px-4 flex-1 flex flex-col min-h-0 mb-8">
         <div className="bg-slate-800/30 backdrop-blur rounded-xl border border-slate-700 overflow-hidden flex-1 flex flex-col relative">
+          {/* Period Labels - STICKY BANNER */}
+          <div
+            ref={periodBannerRef}
+            className="year-markers-container sticky top-0 left-0 right-0 h-7 border-b border-slate-600/50 bg-slate-900/95 backdrop-blur z-30 overflow-x-hidden"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <div className="relative h-full" style={{ width: `${timelineWidth}px` }}>
+              {historicalPeriods.map((period, index) => {
+                const startX = getXPosition(period.startYear);
+                const endX = getXPosition(period.endYear);
+                const width = endX - startX;
+                const isHovered = hoveredPeriod === period.name;
+
+                return (
+                  <div
+                    key={period.name}
+                    className="absolute top-0 bottom-0 cursor-pointer transition-all duration-200"
+                    style={{
+                      left: `${startX}%`,
+                      width: `${width}%`,
+                      borderRight: `1px solid ${period.borderColor}`
+                    }}
+                    onMouseEnter={() => setHoveredPeriod(period.name)}
+                    onMouseLeave={() => setHoveredPeriod(null)}
+                  >
+                    <div
+                      className={`h-full flex items-center justify-center px-2 transition-all duration-200 ${
+                        isHovered ? 'bg-white/10' : ''
+                      }`}
+                      style={{
+                        backgroundColor: isHovered ? period.color.replace('0.15', '0.3') : 'transparent'
+                      }}
+                    >
+                      <span className={`text-[10px] font-semibold transition-all duration-200 ${
+                        isHovered ? 'text-white scale-105' : 'text-slate-400'
+                      }`}>
+                        {period.name}
+                      </span>
+                    </div>
+
+                    {/* Tooltip on hover */}
+                    {isHovered && (
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-1 z-40 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                        <div className="text-xs text-white font-semibold">{period.name}</div>
+                        <div className="text-[10px] text-slate-300">{period.startYear} - {period.endYear}</div>
+                        <div className="text-[10px] text-slate-400 mt-1 max-w-xs">{period.description}</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Year markers - FIXED STICKY HEADER */}
           <div
             ref={yearMarkersRef}
@@ -410,8 +625,31 @@ const AircraftTimeline = () => {
           {/* Scrollable content */}
           <div className="overflow-x-auto overflow-y-auto custom-scrollbar flex-1" ref={timelineContainerRef} onScroll={handleScroll}>
             <div className="relative" style={{ width: `${timelineWidth}px`, height: `${timelineHeight}px` }}>
+              {/* Period Background Zones */}
+              <div className="absolute top-0 left-0 z-0" style={{ width: `${timelineWidth}px`, height: `${timelineHeight}px` }}>
+                {historicalPeriods.map((period) => {
+                  const startX = getXPosition(period.startYear);
+                  const endX = getXPosition(period.endYear);
+                  const width = endX - startX;
+
+                  return (
+                    <div
+                      key={`bg-${period.name}`}
+                      className="absolute top-0"
+                      style={{
+                        left: `${startX}%`,
+                        width: `${width}%`,
+                        height: `${timelineHeight}px`,
+                        backgroundColor: period.color,
+                        borderRight: `1px solid ${period.borderColor}`
+                      }}
+                    />
+                  );
+                })}
+              </div>
+
               {/* Aircraft bars */}
-              <div className="absolute top-0 left-0 right-0">
+              <div className="absolute top-0 left-0 z-10" style={{ width: `${timelineWidth}px` }}>
               {filteredData.map((aircraft, index) => {
                 const startX = getXPosition(aircraft.startYear);
                 const endX = getXPosition(aircraft.endYear);
@@ -523,89 +761,110 @@ const AircraftTimeline = () => {
       </div>
       </div>
 
-      {/* Fixed Legend & Minimap at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-lg border-t border-slate-700 shadow-2xl z-40">
-        <div className="max-w-7xl mx-auto p-4">
-          {/* Minimap */}
-          <div className="mb-3">
+      {/* Collapsible Footer - Legend & Minimap */}
+      <div
+        className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-lg border-t border-slate-700 shadow-2xl z-40 transition-all duration-500 ease-in-out"
+        style={{
+          height: isFooterExpanded ? 'auto' : '24px',
+          maxHeight: isFooterExpanded ? '50vh' : '24px'
+        }}
+        onMouseEnter={() => setIsFooterExpanded(true)}
+        onMouseLeave={() => setIsFooterExpanded(false)}
+      >
+        {/* Collapsed state - thin bar with hint */}
+        {!isFooterExpanded && (
+          <div className="h-6 flex items-center justify-center cursor-pointer">
+            <div className="flex items-center gap-2 text-slate-400 text-xs">
+              <Info className="w-3 h-3" />
+              <span>Hover voor legenda & overzicht</span>
+            </div>
+          </div>
+        )}
+
+        {/* Expanded state */}
+        {isFooterExpanded && (
+          <div className="max-w-7xl mx-auto p-4 overflow-y-auto max-h-[50vh]">
+            {/* Minimap */}
+            <div className="mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="w-4 h-4 text-blue-400" />
+                <span className="font-semibold text-sm">Timeline Overzicht</span>
+              </div>
+              <div className="relative h-12 bg-slate-800/50 rounded-lg overflow-hidden border border-slate-600">
+                {/* Background bars - all aircraft */}
+                <div className="absolute inset-0">
+                  {aircraftData.map((aircraft, index) => {
+                    const startX = getXPosition(aircraft.startYear);
+                    const endX = getXPosition(aircraft.endYear);
+                    const width = endX - startX;
+                    const color = getUserColor(aircraft.user);
+
+                    return (
+                      <div
+                        key={`minimap-${aircraft.name}-${index}`}
+                        className="absolute top-0 bottom-0 opacity-40"
+                        style={{
+                          left: `${startX}%`,
+                          width: `${width}%`,
+                          backgroundColor: color
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Viewport indicator */}
+                {timelineContainerRef.current && (
+                  <div
+                    className="absolute top-0 bottom-0 border-2 border-blue-400 bg-blue-400/20"
+                    style={{
+                      left: `${(scrollLeft / timelineWidth) * 100}%`,
+                      width: `${(timelineContainerRef.current.offsetWidth / timelineWidth) * 100}%`
+                    }}
+                  />
+                )}
+
+                {/* Year labels on minimap */}
+                <div className="absolute inset-0 pointer-events-none">
+                  {[1820, 1880, 1940, 2000].map(year => (
+                    <div
+                      key={`minimap-year-${year}`}
+                      className="absolute top-0 bottom-0 border-l border-slate-500/30"
+                      style={{ left: `${getXPosition(year)}%` }}
+                    >
+                      <span className="absolute bottom-0 left-1 text-[10px] text-slate-400">
+                        {year}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Legend */}
             <div className="flex items-center gap-2 mb-2">
               <Info className="w-4 h-4 text-blue-400" />
-              <span className="font-semibold text-sm">Timeline Overzicht</span>
+              <span className="font-semibold text-sm">Legenda</span>
             </div>
-            <div className="relative h-12 bg-slate-800/50 rounded-lg overflow-hidden border border-slate-600">
-              {/* Background bars - all aircraft */}
-              <div className="absolute inset-0">
-                {aircraftData.map((aircraft, index) => {
-                  const startX = getXPosition(aircraft.startYear);
-                  const endX = getXPosition(aircraft.endYear);
-                  const width = endX - startX;
-                  const color = getUserColor(aircraft.user);
-
-                  return (
-                    <div
-                      key={`minimap-${aircraft.name}-${index}`}
-                      className="absolute top-0 bottom-0 opacity-40"
-                      style={{
-                        left: `${startX}%`,
-                        width: `${width}%`,
-                        backgroundColor: color
-                      }}
-                    />
-                  );
-                })}
-              </div>
-
-              {/* Viewport indicator */}
-              {timelineContainerRef.current && (
-                <div
-                  className="absolute top-0 bottom-0 border-2 border-blue-400 bg-blue-400/20"
-                  style={{
-                    left: `${(scrollLeft / timelineWidth) * 100}%`,
-                    width: `${(timelineContainerRef.current.offsetWidth / timelineWidth) * 100}%`
-                  }}
-                />
-              )}
-
-              {/* Year labels on minimap */}
-              <div className="absolute inset-0 pointer-events-none">
-                {[1820, 1880, 1940, 2000].map(year => (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {[
+                { label: 'KLu (Koninklijke Luchtmacht)', color: '#0055A4' },
+                { label: 'MLD (Marine Luchtvaartdienst)', color: '#003DA5' },
+                { label: 'MLKNIL (ML Koninklijk Nederlands-Indië)', color: '#FF6B35' },
+                { label: 'LVA (Luchtvaartafdeling)', color: '#8B4513' },
+                { label: 'LSK (Luchtvaart Brigade)', color: '#4A7C59' }
+              ].map(item => (
+                <div key={item.label} className="flex items-center gap-2">
                   <div
-                    key={`minimap-year-${year}`}
-                    className="absolute top-0 bottom-0 border-l border-slate-500/30"
-                    style={{ left: `${getXPosition(year)}%` }}
-                  >
-                    <span className="absolute bottom-0 left-1 text-[10px] text-slate-400">
-                      {year}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                    className="w-3 h-3 rounded"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="text-xs text-slate-300">{item.label}</span>
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* Legend */}
-          <div className="flex items-center gap-2 mb-2">
-            <Info className="w-4 h-4 text-blue-400" />
-            <span className="font-semibold text-sm">Legenda</span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-            {[
-              { label: 'KLu (Koninklijke Luchtmacht)', color: '#0055A4' },
-              { label: 'MLD (Marine Luchtvaartdienst)', color: '#003DA5' },
-              { label: 'MLKNIL (ML Koninklijk Nederlands-Indië)', color: '#FF6B35' },
-              { label: 'LVA (Luchtvaartafdeling)', color: '#8B4513' },
-              { label: 'LSK (Luchtvaart Brigade)', color: '#4A7C59' }
-            ].map(item => (
-              <div key={item.label} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-xs text-slate-300">{item.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Aircraft Info Panel */}
