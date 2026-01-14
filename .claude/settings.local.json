@@ -2,7 +2,23 @@
   "permissions": {
     "allow": [
       "Bash(npm install)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npm install openai)",
+      "Read(//c/Users/sheep/Downloads/**)",
+      "Bash(copy \"c:\\Users\\sheep\\Downloads\\ipms-aircraft-reference.js\" \"C:\\Users\\sheep\\OneDrive\\Documents\\GitHub\\ML-infographic\\src\\services\\ipms-aircraft-reference.ts\")",
+      "Bash(npm install dotenv)",
+      "Bash(node scripts/analyze-data-v2.js:*)",
+      "Bash(timeout /t 5 /nobreak)",
+      "Bash(npm run build:*)",
+      "Bash(git lfs:*)",
+      "Bash(git reset:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git rm:*)",
+      "Bash(git rev-list:*)",
+      "Bash(git fetch:*)",
+      "Bash(git rebase:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []
