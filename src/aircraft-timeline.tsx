@@ -1,21 +1,66 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Filter, Info, Plane, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { fetchAircraftInfo } from './services/ipmsService';
+
+// Type definitions
+interface Aircraft {
+  name: string;
+  user: string;
+  startYear: number;
+  endYear: number;
+  totalCount: number;
+  klu: number;
+  mld: number;
+  mlknil: number;
+  notes: string;
+  museum: string;
+  wreckAssessment: number;
+  foto: string;
+  localImage: string;
+  preservationStatus: string;
+}
+
+interface AircraftInfoImageData {
+  url: string;
+  thumbnail?: string;
+  width?: number;
+  height?: number;
+  description?: string;
+  title?: string;
+  language?: string;
+  isSchematic?: boolean;
+  attribution?: {
+    required?: boolean;
+    text: string;
+    license: string;
+    link: string;
+  };
+}
+
+interface AircraftInfo {
+  story: string;
+  imageUrl: string | null;
+  imageData?: AircraftInfoImageData | null;
+  source: string;
+  sourceUrl: string;
+}
 
 const AircraftTimeline = () => {
-  const [aircraftData, setAircraftData] = useState([]);
+  const [aircraftData, setAircraftData] = useState<Aircraft[]>([]);
   const [selectedUser, setSelectedUser] = useState('Alle');
+  const [selectedPreservation, setSelectedPreservation] = useState('Alle');
   const [searchTerm, setSearchTerm] = useState('');
-  const [hoveredAircraft, setHoveredAircraft] = useState(null);
-  const [selectedAircraft, setSelectedAircraft] = useState(null);
+  const [hoveredAircraft, setHoveredAircraft] = useState<string | null>(null);
+  const [selectedAircraft, setSelectedAircraft] = useState<Aircraft | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1.8);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [containerSize, setContainerSize] = useState({ width: 1200, height: 600 });
-  const timelineContainerRef = React.useRef(null);
-  const yearMarkersRef = React.useRef(null);
-  const periodBannerRef = React.useRef(null);
+  const timelineContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const yearMarkersRef = React.useRef<HTMLDivElement | null>(null);
+  const periodBannerRef = React.useRef<HTMLDivElement | null>(null);
 
   // Custom scrollbar styles
   const scrollbarStyles = `
@@ -103,36 +148,160 @@ const AircraftTimeline = () => {
     }
   ];
 
-  const [hoveredPeriod, setHoveredPeriod] = useState(null);
+  const [hoveredPeriod, setHoveredPeriod] = useState<string | null>(null);
   const [isFooterExpanded, setIsFooterExpanded] = useState(false);
+  const [aircraftInfo, setAircraftInfo] = useState<AircraftInfo | null>(null);
+  const [isLoadingInfo, setIsLoadingInfo] = useState(false);
 
   // Generate IPMS search link
-  const getIPMSSearchLink = (aircraftName) => {
-    // Try to create a smart URL based on the aircraft name
-    const cleanName = aircraftName
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[()]/g, '')
-      .replace(/\./g, '');
-    
+  const getIPMSSearchLink = (aircraftName: string) => {
     return `https://www.ipms.nl/zoeken?searchword=${encodeURIComponent(aircraftName)}`;
   };
 
-  // Handle aircraft click - simplified without AI fetch
-  const handleAircraftClick = (aircraft) => {
+  // Handle aircraft click - fetch info from IPMS via OpenAI
+  const handleAircraftClick = async (aircraft: Aircraft) => {
     setSelectedAircraft(aircraft);
-    // No longer fetching - just show the panel with links
+    setAircraftInfo(null); // Reset previous info
+    setIsLoadingInfo(true);
+
+    try {
+      const info = await fetchAircraftInfo(aircraft.name);
+
+      // Priority: Local image > Foto column > Wikipedia scraper
+      let finalImageUrl = info.imageUrl;
+      let finalImageData: AircraftInfoImageData | null | undefined = info.imageData;
+
+      // 1. Try local image first (from data_v2.xlsx.files folder)
+      if (aircraft.localImage) {
+        // Check if local image exists by trying to load it
+        try {
+          const response = await fetch(aircraft.localImage);
+          if (response.ok) {
+            finalImageUrl = aircraft.localImage;
+            finalImageData = {
+              url: aircraft.localImage,
+              attribution: {
+                required: false,
+                text: 'Collectie Nederlandse Militaire Luchtvaart',
+                link: '#',
+                license: ''
+              }
+            } as AircraftInfoImageData;
+          }
+        } catch (e) {
+          // Local image doesn't exist, fall through to next option
+          console.log(`Local image not found for ${aircraft.name}, using fallback`);
+        }
+      }
+
+      // 2. If no local image, try Foto column from Excel
+      if (!finalImageUrl && aircraft.foto && aircraft.foto.trim() !== '') {
+        finalImageUrl = aircraft.foto;
+        finalImageData = {
+          url: aircraft.foto,
+          attribution: {
+            required: false,
+            text: 'Foto uit database',
+            link: aircraft.foto,
+            license: ''
+          }
+        } as AircraftInfoImageData;
+      }
+
+      // 3. Otherwise use Wikipedia scraper result (info.imageUrl)
+
+      setAircraftInfo({
+        ...info,
+        imageUrl: finalImageUrl,
+        imageData: finalImageData
+      });
+
+    } catch (error) {
+      console.error('Error loading aircraft info:', error);
+
+      // Even on error, try to show local image or foto from Excel
+      let errorImageUrl: string | null = null;
+      let errorImageData: AircraftInfoImageData | null = null;
+
+      if (aircraft.localImage) {
+        try {
+          const response = await fetch(aircraft.localImage);
+          if (response.ok) {
+            errorImageUrl = aircraft.localImage;
+            errorImageData = {
+              url: aircraft.localImage,
+              attribution: {
+                required: false,
+                text: 'Collectie Nederlandse Militaire Luchtvaart',
+                link: '#',
+                license: ''
+              }
+            } as AircraftInfoImageData;
+          }
+        } catch (e) {
+          // Fall through
+        }
+      }
+
+      if (!errorImageUrl && aircraft.foto && aircraft.foto.trim() !== '') {
+        errorImageUrl = aircraft.foto;
+        errorImageData = {
+          url: aircraft.foto,
+          attribution: {
+            required: false,
+            text: 'Foto uit database',
+            link: aircraft.foto,
+            license: ''
+          }
+        } as AircraftInfoImageData;
+      }
+
+      setAircraftInfo({
+        story: errorImageUrl ? 'Geen verhaal beschikbaar.' : 'Er ging iets mis bij het ophalen van de informatie. Probeer het later opnieuw.',
+        imageUrl: errorImageUrl,
+        imageData: errorImageData || undefined,
+        source: errorImageUrl ? 'Database' : 'Error',
+        sourceUrl: 'https://www.ipms.nl/artikelen/nedmil-luchtvaart'
+      });
+    } finally {
+      setIsLoadingInfo(false);
+    }
+  };
+
+  // Categorize preservation status
+  const categorizePreservation = (wreckMuseum: string, wreckAssessment: number): string => {
+    if (!wreckMuseum || wreckMuseum === 'Geen resten') {
+      return 'lost';
+    }
+
+    const lowerText = wreckMuseum.toLowerCase();
+
+    if (lowerText.includes('vliegend') || lowerText.includes('flying')) {
+      return 'flying';
+    }
+    if (lowerText.includes('museum') || lowerText.includes('aviodrome') || lowerText.includes('nmm')) {
+      return 'preserved';
+    }
+    if (lowerText.includes('wrak') || lowerText.includes('wreck') || wreckAssessment > 0) {
+      return 'wreck';
+    }
+
+    return 'other';
   };
 
   // Process Excel data from ArrayBuffer
-  const processExcelData = (arrayBuffer) => {
+  const processExcelData = (arrayBuffer: ArrayBuffer): Aircraft[] => {
     const workbook = XLSX.read(arrayBuffer);
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = XLSX.utils.sheet_to_json(firstSheet);
 
+    let rowIndex = 0; // Track actual data row index for image mapping
+
     const cleaned = rawData
-      .filter(a => a.Typenaam && a['Jaar invoering'])
-      .map(a => {
+      .filter((a: any) => a.Typenaam && a['Jaar invoering'])
+      .map((a: any): Aircraft => {
+        rowIndex++; // Increment for each valid aircraft row
+
         const startYear = a['Jaar invoering'];
         let endYear = a['Jaar uit dienst'];
 
@@ -146,17 +315,29 @@ const AircraftTimeline = () => {
           endYear = startYear + 1;
         }
 
+        const wreckMuseum = a['Wrak - museaal - vliegend'] || '';
+        const wreckAssessment = a['Wrak assesment'] || 0;
+        const foto = a.Foto || '';
+
+        // Generate image path based on row index (image001.png, image002.png, etc.)
+        const imageNumber = String(rowIndex).padStart(3, '0');
+        const localImagePath = `/data_v2.xlsx.files/image${imageNumber}.png`;
+
         return {
           name: a.Typenaam,
           user: a.Gebruikers || 'Onbekend',
           startYear: startYear,
           endYear: endYear,
-          totalCount: a.Totaal || 0,
+          totalCount: a.Totaal || a['Aantal Klu'] || 0,
           klu: a['Aantal Klu'] || 0,
           mld: a['Aantal MLD'] || 0,
           mlknil: a['Aantal MLKNIL'] || 0,
           notes: a.Bijzonderheden || '',
-          museum: a['Wrak - museaal - vliegend'] || ''
+          museum: wreckMuseum,
+          wreckAssessment: wreckAssessment,
+          foto: foto,
+          localImage: localImagePath,
+          preservationStatus: categorizePreservation(wreckMuseum, wreckAssessment)
         };
       });
 
@@ -170,15 +351,15 @@ const AircraftTimeline = () => {
         setIsLoading(true);
         setLoadError(null);
 
-        const response = await fetch('/data.xlsx');
+        const response = await fetch('/data_v2.xlsx');
         if (!response.ok) {
-          throw new Error('Kon het Excel bestand niet laden. Zorg ervoor dat data.xlsx in de public folder staat.');
+          throw new Error('Kon het Excel bestand niet laden. Zorg ervoor dat data_v2.xlsx in de public folder staat.');
         }
 
         const arrayBuffer = await response.arrayBuffer();
         const data = processExcelData(arrayBuffer);
         setAircraftData(data);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error loading data:', error);
         setLoadError(error.message);
       } finally {
@@ -222,8 +403,8 @@ const AircraftTimeline = () => {
   }, [aircraftData, zoomLevel]);
 
   // Track scroll position for minimap and sync year markers
-  const handleScroll = (e) => {
-    const container = e.target;
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.target as HTMLDivElement;
     const maxScroll = container.scrollWidth - container.clientWidth;
 
     // Prevent scrolling past the end
@@ -245,7 +426,7 @@ const AircraftTimeline = () => {
   };
 
   // Mouse wheel zoom handler
-  const handleWheel = (e) => {
+  const handleWheel = (e: WheelEvent) => {
     // Check if Ctrl key is pressed (common zoom shortcut)
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
@@ -274,7 +455,7 @@ const AircraftTimeline = () => {
   }, [zoomLevel]);
 
   // Color mapping for different users
-  const getUserColor = (user) => {
+  const getUserColor = (user: string): string => {
     const colorMap = {
       'KLu': '#0055A4',
       'Klu': '#0055A4',
@@ -286,11 +467,27 @@ const AircraftTimeline = () => {
       'ML': '#2E5C8A',
       'RAF': '#5B92E5',
     };
-    
+
     for (const [key, color] of Object.entries(colorMap)) {
       if (user.includes(key)) return color;
     }
     return '#6B7280';
+  };
+
+  // Get wreck assessment gradient overlay color
+  const getWreckAssessmentColor = (assessment: number, preservationStatus: string): string => {
+    if (preservationStatus === 'flying') {
+      return 'linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, transparent 100%)'; // Green for flying
+    }
+    if (preservationStatus === 'preserved') {
+      return 'linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, transparent 100%)'; // Blue for museum
+    }
+    if (assessment > 0) {
+      // Orange gradient intensity based on assessment (0-52 scale)
+      const intensity = Math.min(assessment / 52, 1);
+      return `linear-gradient(135deg, rgba(251, 146, 60, ${0.2 + intensity * 0.4}) 0%, transparent 100%)`;
+    }
+    return 'transparent';
   };
 
   // Filter data
@@ -298,16 +495,21 @@ const AircraftTimeline = () => {
     return aircraftData.filter(aircraft => {
       const matchesUser = selectedUser === 'Alle' || aircraft.user.includes(selectedUser);
       const matchesSearch = aircraft.name.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesUser && matchesSearch;
+      const matchesPreservation = selectedPreservation === 'Alle' ||
+        (selectedPreservation === 'Bewaard' && (aircraft.preservationStatus === 'preserved' || aircraft.preservationStatus === 'flying')) ||
+        (selectedPreservation === 'Vliegend' && aircraft.preservationStatus === 'flying') ||
+        (selectedPreservation === 'Wrakken' && aircraft.preservationStatus === 'wreck') ||
+        (selectedPreservation === 'Verloren' && aircraft.preservationStatus === 'lost');
+      return matchesUser && matchesSearch && matchesPreservation;
     });
-  }, [aircraftData, selectedUser, searchTerm]);
+  }, [aircraftData, selectedUser, searchTerm, selectedPreservation]);
 
   // Prevent scroll beyond boundaries using requestAnimationFrame
   useEffect(() => {
     const container = timelineContainerRef.current;
     if (!container) return;
 
-    let animationFrameId = null;
+    let animationFrameId: number | null = null;
 
     const clampScroll = () => {
       const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
@@ -349,8 +551,8 @@ const AircraftTimeline = () => {
   }, [zoomLevel, containerSize.width, filteredData.length]);
 
   // Get unique users for filter
-  const uniqueUsers = useMemo(() => {
-    const users = new Set();
+  const uniqueUsers = useMemo((): string[] => {
+    const users = new Set<string>();
     aircraftData.forEach(a => {
       if (a.user.includes('KLu') || a.user.includes('Klu') || a.user.includes('KLU')) users.add('KLu');
       if (a.user.includes('MLD')) users.add('MLD');
@@ -375,18 +577,18 @@ const AircraftTimeline = () => {
   const timelineHeight = Math.max(neededHeight, containerSize.height); // Always show all aircraft
 
   // Calculate position
-  const getXPosition = (year) => {
+  const getXPosition = (year: number): number => {
     return ((year - minYear) / yearRange) * 100;
   };
 
   // Generate year markers based on zoom level
-  const getYearMarkers = () => {
-    let interval;
+  const getYearMarkers = (): number[] => {
+    let interval: number;
     if (zoomLevel >= 2.5) interval = 10; // Very zoomed in - every 10 years
     else if (zoomLevel >= 1.5) interval = 20; // Medium zoom - every 20 years
     else interval = 30; // Zoomed out - every 30 years
 
-    const markers = [];
+    const markers: number[] = [];
     for (let year = Math.ceil(minYear / interval) * interval; year <= maxYear; year += interval) {
       markers.push(year);
     }
@@ -396,12 +598,14 @@ const AircraftTimeline = () => {
   // Statistics
   const stats = useMemo(() => {
     const total = filteredData.reduce((sum, a) => sum + a.totalCount, 0);
-    const withMuseum = filteredData.filter(a => a.museum).length;
-    
+    const preserved = filteredData.filter(a => a.preservationStatus === 'preserved' || a.preservationStatus === 'flying').length;
+    const flying = filteredData.filter(a => a.preservationStatus === 'flying').length;
+    const wrecks = filteredData.filter(a => a.preservationStatus === 'wreck').length;
+
     // Calculate average service years correctly
     let totalServiceYears = 0;
     let countWithService = 0;
-    
+
     filteredData.forEach(a => {
       // Only count if we have both start and end year, and end year is not current year (still in service)
       if (a.startYear && a.endYear && a.endYear < 2025) {
@@ -409,13 +613,15 @@ const AircraftTimeline = () => {
         countWithService++;
       }
     });
-    
+
     const averageService = countWithService > 0 ? Math.round(totalServiceYears / countWithService) : 0;
-    
+
     return {
       types: filteredData.length,
       total,
-      withMuseum,
+      preserved,
+      flying,
+      wrecks,
       averageService
     };
   }, [filteredData]);
@@ -509,6 +715,24 @@ const AircraftTimeline = () => {
               </select>
             </div>
 
+            {/* Preservation Filter */}
+            <div className="relative">
+              <svg className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              <select
+                value={selectedPreservation}
+                onChange={(e) => setSelectedPreservation(e.target.value)}
+                className="pl-8 pr-8 py-1.5 text-sm bg-slate-700/50 border border-slate-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
+              >
+                <option value="Alle">Alle status</option>
+                <option value="Bewaard">Bewaard</option>
+                <option value="Vliegend">Vliegend</option>
+                <option value="Wrakken">Wrakken</option>
+                <option value="Verloren">Verloren</option>
+              </select>
+            </div>
+
             {/* Stats inline */}
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-1">
@@ -518,6 +742,10 @@ const AircraftTimeline = () => {
               <div className="flex items-center gap-1">
                 <span className="font-bold text-orange-400">{stats.total}</span>
                 <span className="text-slate-400">totaal</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-bold text-green-400">{stats.preserved}</span>
+                <span className="text-slate-400">bewaard</span>
               </div>
             </div>
 
@@ -554,7 +782,7 @@ const AircraftTimeline = () => {
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             <div className="relative h-full" style={{ width: `${timelineWidth}px` }}>
-              {historicalPeriods.map((period, index) => {
+              {historicalPeriods.map((period) => {
                 const startX = getXPosition(period.startYear);
                 const endX = getXPosition(period.endYear);
                 const width = endX - startX;
@@ -688,7 +916,8 @@ const AircraftTimeline = () => {
                       }`}
                       style={{
                         backgroundColor: color,
-                        boxShadow: isHovered ? `0 0 20px ${color}` : 'none'
+                        boxShadow: isHovered ? `0 0 20px ${color}` : 'none',
+                        backgroundImage: getWreckAssessmentColor(aircraft.wreckAssessment, aircraft.preservationStatus)
                       }}
                     />
 
@@ -705,7 +934,18 @@ const AircraftTimeline = () => {
                     {/* Tooltip */}
                     {isHovered && (
                       <div className="absolute left-0 top-6 z-50 bg-slate-900 border border-slate-600 rounded-lg p-4 shadow-xl w-96">
-                        <div className="font-bold text-xl mb-3 text-blue-400">{aircraft.name}</div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="font-bold text-xl text-blue-400">{aircraft.name}</div>
+                          {aircraft.preservationStatus === 'flying' && (
+                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded font-semibold">✈️ Vliegend</span>
+                          )}
+                          {aircraft.preservationStatus === 'preserved' && (
+                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded font-semibold">🏛️ Museum</span>
+                          )}
+                          {aircraft.preservationStatus === 'wreck' && aircraft.wreckAssessment > 0 && (
+                            <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded font-semibold">🔧 {aircraft.wreckAssessment}</span>
+                          )}
+                        </div>
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between py-1">
                             <span className="text-slate-400">Gebruiker:</span>
@@ -745,7 +985,12 @@ const AircraftTimeline = () => {
                           )}
                           {aircraft.museum && (
                             <div className="mt-3 pt-3 border-t border-slate-700">
-                              <span className="text-orange-400 text-sm font-semibold">🏛️ Museum:</span>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-orange-400 text-sm font-semibold">🏛️ Museum:</span>
+                                {aircraft.wreckAssessment > 0 && (
+                                  <span className="text-xs text-orange-300 bg-orange-500/20 px-2 py-0.5 rounded">{aircraft.wreckAssessment}/52</span>
+                                )}
+                              </div>
                               <p className="text-sm mt-2 text-slate-200 leading-relaxed">{aircraft.museum}</p>
                             </div>
                           )}
@@ -842,26 +1087,59 @@ const AircraftTimeline = () => {
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-2 mb-2">
-              <Info className="w-4 h-4 text-blue-400" />
-              <span className="font-semibold text-sm">Legenda</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              {[
-                { label: 'KLu (Koninklijke Luchtmacht)', color: '#0055A4' },
-                { label: 'MLD (Marine Luchtvaartdienst)', color: '#003DA5' },
-                { label: 'MLKNIL (ML Koninklijk Nederlands-Indië)', color: '#FF6B35' },
-                { label: 'LVA (Luchtvaartafdeling)', color: '#8B4513' },
-                { label: 'LSK (Luchtvaart Brigade)', color: '#4A7C59' }
-              ].map(item => (
-                <div key={item.label} className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-xs text-slate-300">{item.label}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* User Colors */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="w-4 h-4 text-blue-400" />
+                  <span className="font-semibold text-sm">Gebruikers</span>
                 </div>
-              ))}
+                <div className="grid grid-cols-1 gap-1">
+                  {[
+                    { label: 'KLu (Koninklijke Luchtmacht)', color: '#0055A4' },
+                    { label: 'MLD (Marine Luchtvaartdienst)', color: '#003DA5' },
+                    { label: 'MLKNIL (ML Koninklijk Nederlands-Indië)', color: '#FF6B35' },
+                    { label: 'LVA (Luchtvaartafdeling)', color: '#8B4513' },
+                    { label: 'LSK (Luchtvaart Brigade)', color: '#4A7C59' }
+                  ].map(item => (
+                    <div key={item.label} className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <span className="text-xs text-slate-300">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preservation Status */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="font-semibold text-sm">Behouds Status (gradient overlay)</span>
+                </div>
+                <div className="grid grid-cols-1 gap-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.5) 0%, transparent 100%)' }} />
+                    <span className="text-xs text-slate-300">✈️ Nog vliegend</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, transparent 100%)' }} />
+                    <span className="text-xs text-slate-300">🏛️ In museum bewaard</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.4) 0%, transparent 100%)' }} />
+                    <span className="text-xs text-slate-300">🔧 Wrakken/resten (intensiteit = score)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-3 rounded bg-slate-700/30" />
+                    <span className="text-xs text-slate-300">Geen resten bekend</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -869,7 +1147,10 @@ const AircraftTimeline = () => {
 
       {/* Aircraft Info Panel */}
       {selectedAircraft && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedAircraft(null)}>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => {
+          setSelectedAircraft(null);
+          setAircraftInfo(null);
+        }}>
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl border-2 border-blue-500/50 shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             {/* Header - Fixed */}
             <div className="bg-gradient-to-r from-blue-600 to-orange-600 p-4 flex items-center justify-between flex-shrink-0">
@@ -880,8 +1161,11 @@ const AircraftTimeline = () => {
                   <p className="text-blue-100 text-sm">{selectedAircraft.user}</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setSelectedAircraft(null)}
+              <button
+                onClick={() => {
+                  setSelectedAircraft(null);
+                  setAircraftInfo(null);
+                }}
                 className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -938,65 +1222,160 @@ const AircraftTimeline = () => {
                 )}
 
                 {selectedAircraft.museum && (
-                  <div className="mt-3 bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
-                    <div className="text-orange-400 text-sm font-semibold mb-1">🏛️ Museum & Behoud</div>
+                  <div className="mt-3 bg-gradient-to-br from-orange-500/10 to-yellow-500/10 border border-orange-500/30 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-orange-400 text-sm font-semibold">🏛️ Museum & Behoud</div>
+                      {selectedAircraft.wreckAssessment > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-slate-400">Wrak score:</span>
+                          <span className="text-xs font-bold text-orange-300 bg-orange-500/20 px-2 py-0.5 rounded">
+                            {selectedAircraft.wreckAssessment}/52
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     <p className="text-slate-200 text-sm leading-relaxed">{selectedAircraft.museum}</p>
+                    {selectedAircraft.preservationStatus === 'flying' && (
+                      <div className="mt-2 flex items-center gap-1 text-green-400 text-xs">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="font-semibold">Nog vliegend</span>
+                      </div>
+                    )}
+                    {selectedAircraft.preservationStatus === 'preserved' && (
+                      <div className="mt-2 flex items-center gap-1 text-blue-400 text-xs">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <span className="font-semibold">In museum bewaard</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* IPMS Info */}
-              <div className="p-4">
+              {/* AI-Generated Story */}
+              <div className="p-4 border-t border-slate-700">
                 <div className="flex items-center gap-2 mb-3">
                   <Info className="w-5 h-5 text-blue-400" />
-                  <h3 className="text-lg font-bold text-white">Meer informatie</h3>
+                  <h3 className="text-lg font-bold text-white">Verhaal</h3>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="bg-gradient-to-r from-blue-600/20 to-orange-600/20 border border-blue-500/30 rounded-lg p-3">
-                    <p className="text-slate-200 text-sm mb-3">
-                      Voor uitgebreide informatie, foto's en technische details over de <strong>{selectedAircraft.name}</strong>.
-                    </p>
-                    
+                {isLoadingInfo && (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+                    <span className="ml-3 text-slate-300">Informatie wordt opgehaald...</span>
+                  </div>
+                )}
+
+                {!isLoadingInfo && aircraftInfo && (
+                  <div className="space-y-4">
+                    {/* Image with Attribution */}
+                    {aircraftInfo.imageUrl && aircraftInfo.imageData && (
+                      <div className="rounded-lg overflow-hidden border border-slate-600 bg-slate-900/50">
+                        <img
+                          src={aircraftInfo.imageUrl}
+                          alt={aircraftInfo.imageData.description || selectedAircraft.name}
+                          className="w-full h-64 object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        {aircraftInfo.imageData.attribution && (
+                          <div className="p-2 bg-slate-800/80 text-[10px] text-slate-400">
+                            <div className="flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                              </svg>
+                              <a
+                                href={aircraftInfo.imageData.attribution.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-blue-400 underline"
+                              >
+                                {aircraftInfo.imageData.attribution.text}
+                              </a>
+                              <span className="mx-1">•</span>
+                              <span>{aircraftInfo.imageData.attribution.license}</span>
+                              {aircraftInfo.imageData.isSchematic && (
+                                <>
+                                  <span className="mx-1">•</span>
+                                  <span className="text-orange-400">Schematische tekening</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Story */}
+                    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-lg p-4 border border-slate-600">
+                      <div className="text-slate-200 text-sm leading-relaxed whitespace-pre-line">
+                        {aircraftInfo.story}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-slate-700">
+                        <div className="flex items-center gap-2 mb-1">
+                          <svg className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-xs text-slate-400">Bron:</span>
+                          <a
+                            href={aircraftInfo.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`text-xs font-semibold underline ${
+                              aircraftInfo.source.includes('IPMS') ? 'text-blue-400 hover:text-blue-300' :
+                              aircraftInfo.source.includes('Wikipedia') ? 'text-green-400 hover:text-green-300' :
+                              'text-orange-400 hover:text-orange-300'
+                            }`}
+                          >
+                            {aircraftInfo.source}
+                          </a>
+                        </div>
+                        {aircraftInfo.source.includes('AI Kennis') && (
+                          <p className="text-[10px] text-slate-500 italic ml-5">
+                            Geen online bron beschikbaar - gegenereerd uit AI kennis
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* IPMS Links */}
                     <div className="flex flex-wrap gap-2">
-                      <a 
+                      <a
                         href={getIPMSSearchLink(selectedAircraft.name)}
-                        target="_blank" 
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all hover:scale-105 text-sm font-semibold"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
-                        Zoek op IPMS.nl
+                        Meer op IPMS.nl
                       </a>
-                      
-                      <a 
-                        href="https://www.ipms.nl/artikelen/nedmil-luchtvaart" 
-                        target="_blank" 
+
+                      <a
+                        href="https://www.ipms.nl/artikelen/nedmil-luchtvaart"
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all hover:scale-105 text-sm"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                         </svg>
-                        Alle vliegtuigen
+                        Alfabetische lijst
                       </a>
                     </div>
                   </div>
+                )}
 
-                  <div className="bg-slate-800/50 rounded-lg p-3">
-                    <h4 className="text-orange-400 font-semibold mb-2 flex items-center gap-2 text-sm">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Tip voor uitgebreide info
-                    </h4>
-                    <p className="text-slate-300 text-sm leading-relaxed">
-                      Vraag Claude in de chat: <em className="text-blue-300">"Zoek informatie over {selectedAircraft.name} op ipms.nl"</em>
-                    </p>
+                {!isLoadingInfo && !aircraftInfo && (
+                  <div className="text-center py-8 text-slate-400">
+                    Klik op een vliegtuig om informatie te laden
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
