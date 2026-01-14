@@ -5,12 +5,16 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate-cache": "node scripts/generate-cache.js",
+    "generate-cache:force": "node scripts/generate-cache.js --force"
   },
   "dependencies": {
+    "dotenv": "^17.2.3",
+    "lucide-react": "^0.453.0",
+    "openai": "^6.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "lucide-react": "^0.453.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
