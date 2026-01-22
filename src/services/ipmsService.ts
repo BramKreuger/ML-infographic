@@ -1,6 +1,5 @@
 import OpenAI from 'openai';
 import { findAircraftUrl } from './ipms-aircraft-reference';
-import { getBestAircraftPhoto } from './photo-scraper';
 
 // Initialize OpenAI client
 const getOpenAIClient = () => {
@@ -40,40 +39,13 @@ interface AircraftInfo {
 
 /**
  * Fetch the actual IPMS.nl page content using a CORS proxy
+ * NOTE: CORS proxy is disabled due to reliability issues on deployed version
+ * Stories are served from cache instead
  */
-const fetchIPMSPageContent = async (url: string): Promise<string | null> => {
-  try {
-    // Use a CORS proxy to fetch the page
-    const corsProxy = 'https://api.allorigins.win/raw?url=';
-    const proxyUrl = corsProxy + encodeURIComponent(url);
-
-    const response = await fetch(proxyUrl);
-    if (!response.ok) {
-      console.warn('Could not fetch IPMS page:', response.status);
-      return null;
-    }
-
-    const html = await response.text();
-
-    // Extract main content (remove scripts, styles, navigation)
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    // Get the main article content
-    const article = doc.querySelector('article') || doc.querySelector('.item-page') || doc.querySelector('main');
-    if (!article) {
-      console.warn('Could not find article content on page');
-      return null;
-    }
-
-    // Clean up the content
-    const text = article.textContent || '';
-    // Limit to first 3000 characters to save tokens
-    return text.slice(0, 3000).trim();
-  } catch (error) {
-    console.error('Error fetching IPMS page:', error);
-    return null;
-  }
+const fetchIPMSPageContent = async (_url: string): Promise<string | null> => {
+  // CORS proxy disabled - use cached stories instead
+  // External fetching causes errors on deployment
+  return null;
 };
 
 // Cache for aircraft stories
@@ -123,11 +95,10 @@ export const fetchAircraftInfo = async (aircraftName: string): Promise<AircraftI
     const ipmsUrl = findAircraftUrl(aircraftName) || 'https://www.ipms.nl/artikelen/nedmil-luchtvaart';
     console.log('Aircraft:', aircraftName, '| IPMS URL:', ipmsUrl);
 
-    // Fetch photo (Wikipedia → Wikimedia Commons cascade, geen AI credits!)
-    console.log('📷 Fetching photo for:', aircraftName);
-    await getBestAircraftPhoto(aircraftName, ipmsUrl);
+    // Note: Photos are now served from local files in /data_v2.xlsx.files/
+    // External photo fetching is disabled due to CORS issues
 
-    // Try to fetch the actual page content
+    // Try to fetch the actual page content (disabled, returns null)
     const pageContent = await fetchIPMSPageContent(ipmsUrl);
 
     let systemPrompt = '';

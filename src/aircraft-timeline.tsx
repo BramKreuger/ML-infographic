@@ -164,103 +164,66 @@ const AircraftTimeline = () => {
     setAircraftInfo(null); // Reset previous info
     setIsLoadingInfo(true);
 
+    // Priority: Local image > Foto column > Wikipedia scraper
+    // Check local image FIRST before any external calls
+    let finalImageUrl: string | null = null;
+    let finalImageData: AircraftInfoImageData | null = null;
+
+    // 1. Try local image first (from data_v2.xlsx.files folder)
+    if (aircraft.localImage) {
+      try {
+        const response = await fetch(aircraft.localImage);
+        if (response.ok) {
+          finalImageUrl = aircraft.localImage;
+          finalImageData = {
+            url: aircraft.localImage,
+            attribution: {
+              required: false,
+              text: 'Collectie Nederlandse Militaire Luchtvaart',
+              link: '#',
+              license: ''
+            }
+          } as AircraftInfoImageData;
+        }
+      } catch (e) {
+        console.log(`Local image not found for ${aircraft.name}, checking other sources`);
+      }
+    }
+
+    // 2. If no local image, try Foto column from Excel
+    if (!finalImageUrl && aircraft.foto && aircraft.foto.trim() !== '') {
+      finalImageUrl = aircraft.foto;
+      finalImageData = {
+        url: aircraft.foto,
+        attribution: {
+          required: false,
+          text: 'Foto uit database',
+          link: aircraft.foto,
+          license: ''
+        }
+      } as AircraftInfoImageData;
+    }
+
     try {
+      // Fetch story info (external CORS calls are disabled, uses cache/fallback)
       const info = await fetchAircraftInfo(aircraft.name);
 
-      // Priority: Local image > Foto column > Wikipedia scraper
-      let finalImageUrl = info.imageUrl;
-      let finalImageData: AircraftInfoImageData | null | undefined = info.imageData;
-
-      // 1. Try local image first (from data_v2.xlsx.files folder)
-      if (aircraft.localImage) {
-        // Check if local image exists by trying to load it
-        try {
-          const response = await fetch(aircraft.localImage);
-          if (response.ok) {
-            finalImageUrl = aircraft.localImage;
-            finalImageData = {
-              url: aircraft.localImage,
-              attribution: {
-                required: false,
-                text: 'Collectie Nederlandse Militaire Luchtvaart',
-                link: '#',
-                license: ''
-              }
-            } as AircraftInfoImageData;
-          }
-        } catch (e) {
-          // Local image doesn't exist, fall through to next option
-          console.log(`Local image not found for ${aircraft.name}, using fallback`);
-        }
-      }
-
-      // 2. If no local image, try Foto column from Excel
-      if (!finalImageUrl && aircraft.foto && aircraft.foto.trim() !== '') {
-        finalImageUrl = aircraft.foto;
-        finalImageData = {
-          url: aircraft.foto,
-          attribution: {
-            required: false,
-            text: 'Foto uit database',
-            link: aircraft.foto,
-            license: ''
-          }
-        } as AircraftInfoImageData;
-      }
-
-      // 3. Otherwise use Wikipedia scraper result (info.imageUrl)
-
+      // Use local image if found, otherwise fall back to info.imageUrl (if any)
       setAircraftInfo({
         ...info,
-        imageUrl: finalImageUrl,
-        imageData: finalImageData
+        imageUrl: finalImageUrl || info.imageUrl,
+        imageData: finalImageData || info.imageData
       });
 
     } catch (error) {
       console.error('Error loading aircraft info:', error);
 
-      // Even on error, try to show local image or foto from Excel
-      let errorImageUrl: string | null = null;
-      let errorImageData: AircraftInfoImageData | null = null;
-
-      if (aircraft.localImage) {
-        try {
-          const response = await fetch(aircraft.localImage);
-          if (response.ok) {
-            errorImageUrl = aircraft.localImage;
-            errorImageData = {
-              url: aircraft.localImage,
-              attribution: {
-                required: false,
-                text: 'Collectie Nederlandse Militaire Luchtvaart',
-                link: '#',
-                license: ''
-              }
-            } as AircraftInfoImageData;
-          }
-        } catch (e) {
-          // Fall through
-        }
-      }
-
-      if (!errorImageUrl && aircraft.foto && aircraft.foto.trim() !== '') {
-        errorImageUrl = aircraft.foto;
-        errorImageData = {
-          url: aircraft.foto,
-          attribution: {
-            required: false,
-            text: 'Foto uit database',
-            link: aircraft.foto,
-            license: ''
-          }
-        } as AircraftInfoImageData;
-      }
-
+      // Even on error, show local image if available
       setAircraftInfo({
-        story: errorImageUrl ? 'Geen verhaal beschikbaar.' : 'Er ging iets mis bij het ophalen van de informatie. Probeer het later opnieuw.',
-        imageUrl: errorImageUrl,
-        imageData: errorImageData || undefined,
-        source: errorImageUrl ? 'Database' : 'Error',
+        story: finalImageUrl ? 'Geen verhaal beschikbaar.' : 'Er ging iets mis bij het ophalen van de informatie. Probeer het later opnieuw.',
+        imageUrl: finalImageUrl,
+        imageData: finalImageData || undefined,
+        source: finalImageUrl ? 'Lokale collectie' : 'Error',
         sourceUrl: 'https://www.ipms.nl/artikelen/nedmil-luchtvaart'
       });
     } finally {
