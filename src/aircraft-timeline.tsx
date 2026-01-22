@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Filter, Info, Plane, Loader2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Search, Filter, Info, Plane, Loader2, ZoomIn, ZoomOut, BarChart3 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { fetchAircraftInfo } from './services/ipmsService';
+import VisualizationDashboard from './components/VisualizationDashboard';
 
 // Type definitions
 interface Aircraft {
@@ -154,6 +155,7 @@ const AircraftTimeline = () => {
   const [aircraftInfo, setAircraftInfo] = useState<AircraftInfo | null>(null);
   const [isLoadingInfo, setIsLoadingInfo] = useState(false);
   const [selectedType, setSelectedType] = useState('Alle');
+  const [showVisualization, setShowVisualization] = useState(false);
 
   // Generate IPMS search link
   const getIPMSSearchLink = (aircraftName: string) => {
@@ -661,6 +663,20 @@ const AircraftTimeline = () => {
     );
   }
 
+  // Show visualization dashboard
+  if (showVisualization) {
+    return (
+      <VisualizationDashboard
+        aircraftData={aircraftData}
+        onBack={() => setShowVisualization(false)}
+        onAircraftClick={(aircraft) => {
+          setShowVisualization(false);
+          handleAircraftClick(aircraft);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white flex flex-col">
       <style>{scrollbarStyles}</style>
@@ -673,6 +689,13 @@ const AircraftTimeline = () => {
           </h1>
           <span className="text-slate-400 text-sm ml-2">1817-2025</span>
         </div>
+        <button
+          onClick={() => setShowVisualization(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold transition-all shadow-lg hover:shadow-purple-500/25"
+        >
+          <BarChart3 className="w-5 h-5" />
+          <span>Visualisaties</span>
+        </button>
       </div>
 
       {/* Controls */}
