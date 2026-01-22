@@ -19,6 +19,7 @@ interface Aircraft {
   foto: string;
   localImage: string;
   preservationStatus: string;
+  aircraftType: string; // vliegtuig, helikopter, drijvervliegtuig, vliegboot, UAV
 }
 
 interface AircraftInfoImageData {
@@ -152,6 +153,7 @@ const AircraftTimeline = () => {
   const [isFooterExpanded, setIsFooterExpanded] = useState(false);
   const [aircraftInfo, setAircraftInfo] = useState<AircraftInfo | null>(null);
   const [isLoadingInfo, setIsLoadingInfo] = useState(false);
+  const [selectedType, setSelectedType] = useState('Alle');
 
   // Generate IPMS search link
   const getIPMSSearchLink = (aircraftName: string) => {
@@ -281,6 +283,7 @@ const AircraftTimeline = () => {
         const wreckMuseum = a['Wrak - museaal - vliegend'] || '';
         const wreckAssessment = a['Wrak assesment'] || 0;
         const foto = a.Foto || '';
+        const aircraftType = a.type || a.Type || 'vliegtuig';
 
         // Generate image path based on row index (image001.jpg, image002.jpg, etc.)
         const imageNumber = String(rowIndex).padStart(3, '0');
@@ -300,7 +303,8 @@ const AircraftTimeline = () => {
           wreckAssessment: wreckAssessment,
           foto: foto,
           localImage: localImagePath,
-          preservationStatus: categorizePreservation(wreckMuseum, wreckAssessment)
+          preservationStatus: categorizePreservation(wreckMuseum, wreckAssessment),
+          aircraftType: aircraftType
         };
       });
 
@@ -314,7 +318,7 @@ const AircraftTimeline = () => {
         setIsLoading(true);
         setLoadError(null);
 
-        const response = await fetch('/data_v2.xlsx');
+        const response = await fetch('/data_v3.xlsx');
         if (!response.ok) {
           throw new Error('Kon het Excel bestand niet laden. Zorg ervoor dat data_v2.xlsx in de public folder staat.');
         }
@@ -453,6 +457,19 @@ const AircraftTimeline = () => {
     return 'transparent';
   };
 
+  // Get aircraft type info (icon and color)
+  const getAircraftTypeInfo = (type: string): { icon: string; label: string; color: string } => {
+    const typeMap: { [key: string]: { icon: string; label: string; color: string } } = {
+      'vliegtuig': { icon: '✈️', label: 'Vliegtuig', color: 'rgba(59, 130, 246, 0.3)' },
+      'helikopter': { icon: '🚁', label: 'Helikopter', color: 'rgba(168, 85, 247, 0.3)' },
+      'drijvervliegtuig': { icon: '🛩️', label: 'Drijvervliegtuig', color: 'rgba(14, 165, 233, 0.3)' },
+      'vliegboot': { icon: '🚤', label: 'Vliegboot', color: 'rgba(6, 182, 212, 0.3)' },
+      'UAV': { icon: '🎮', label: 'UAV/Drone', color: 'rgba(239, 68, 68, 0.3)' },
+      'vliegtuig - drijvervliegtuig': { icon: '🛩️', label: 'Vliegtuig/Drijver', color: 'rgba(14, 165, 233, 0.3)' },
+    };
+    return typeMap[type.toLowerCase()] || typeMap['vliegtuig'];
+  };
+
   // Filter data
   const filteredData = useMemo(() => {
     return aircraftData.filter(aircraft => {
@@ -463,9 +480,19 @@ const AircraftTimeline = () => {
         (selectedPreservation === 'Vliegend' && aircraft.preservationStatus === 'flying') ||
         (selectedPreservation === 'Wrakken' && aircraft.preservationStatus === 'wreck') ||
         (selectedPreservation === 'Verloren' && aircraft.preservationStatus === 'lost');
-      return matchesUser && matchesSearch && matchesPreservation;
+      const matchesType = selectedType === 'Alle' || aircraft.aircraftType.toLowerCase().includes(selectedType.toLowerCase());
+      return matchesUser && matchesSearch && matchesPreservation && matchesType;
     });
-  }, [aircraftData, selectedUser, searchTerm, selectedPreservation]);
+  }, [aircraftData, selectedUser, searchTerm, selectedPreservation, selectedType]);
+
+  // Get unique aircraft types for filter
+  const uniqueTypes = useMemo((): string[] => {
+    const types = new Set<string>();
+    aircraftData.forEach(a => {
+      if (a.aircraftType) types.add(a.aircraftType);
+    });
+    return ['Alle', ...Array.from(types).sort()];
+  }, [aircraftData]);
 
   // Prevent scroll beyond boundaries using requestAnimationFrame
   useEffect(() => {
@@ -696,6 +723,22 @@ const AircraftTimeline = () => {
               </select>
             </div>
 
+            {/* Type Filter */}
+            <div className="relative">
+              <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-sm pointer-events-none">✈️</span>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="pl-8 pr-8 py-1.5 text-sm bg-slate-700/50 border border-slate-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
+              >
+                {uniqueTypes.map(type => (
+                  <option key={type} value={type}>
+                    {type === 'Alle' ? 'Alle types' : type.charAt(0).toUpperCase() + type.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Stats inline */}
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-1">
@@ -884,32 +927,42 @@ const AircraftTimeline = () => {
                       }}
                     />
 
-                    {/* Label */}
+                    {/* Label with type icon */}
                     <div
-                      className={`absolute left-2 top-0 text-xs font-medium transition-opacity duration-200 ${
+                      className={`absolute left-1 top-0 h-full flex items-center gap-1 text-xs font-medium transition-opacity duration-200 ${
                         shouldShowLabel ? 'opacity-100' : 'opacity-0'
                       }`}
                       style={{ color: 'white', textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
                     >
-                      {aircraft.name}
+                      <span className="text-[10px] opacity-80">{getAircraftTypeInfo(aircraft.aircraftType).icon}</span>
+                      <span>{aircraft.name}</span>
                     </div>
 
                     {/* Tooltip */}
                     {isHovered && (
                       <div className="absolute left-0 top-6 z-50 bg-slate-900 border border-slate-600 rounded-lg p-4 shadow-xl w-96">
                         <div className="flex items-center justify-between mb-3">
-                          <div className="font-bold text-xl text-blue-400">{aircraft.name}</div>
-                          {aircraft.preservationStatus === 'flying' && (
-                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded font-semibold">✈️ Vliegend</span>
-                          )}
-                          {aircraft.preservationStatus === 'preserved' && (
-                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded font-semibold">🏛️ Museum</span>
-                          )}
-                          {aircraft.preservationStatus === 'wreck' && aircraft.wreckAssessment > 0 && (
-                            <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded font-semibold">🔧 {aircraft.wreckAssessment}</span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{getAircraftTypeInfo(aircraft.aircraftType).icon}</span>
+                            <div className="font-bold text-xl text-blue-400">{aircraft.name}</div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {aircraft.preservationStatus === 'flying' && (
+                              <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded font-semibold">Vliegend</span>
+                            )}
+                            {aircraft.preservationStatus === 'preserved' && (
+                              <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded font-semibold">Museum</span>
+                            )}
+                            {aircraft.preservationStatus === 'wreck' && aircraft.wreckAssessment > 0 && (
+                              <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded font-semibold">🔧 {aircraft.wreckAssessment}</span>
+                            )}
+                          </div>
                         </div>
                         <div className="space-y-2 text-sm">
+                          <div className="flex justify-between py-1">
+                            <span className="text-slate-400">Type:</span>
+                            <span className="font-medium text-slate-300 capitalize">{aircraft.aircraftType}</span>
+                          </div>
                           <div className="flex justify-between py-1">
                             <span className="text-slate-400">Gebruiker:</span>
                             <span className="font-medium text-white">{aircraft.user}</span>
@@ -1050,7 +1103,7 @@ const AircraftTimeline = () => {
             </div>
 
             {/* Legend */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* User Colors */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -1076,30 +1129,52 @@ const AircraftTimeline = () => {
                 </div>
               </div>
 
+              {/* Aircraft Types */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">✈️</span>
+                  <span className="font-semibold text-sm">Vliegtuigtypes</span>
+                </div>
+                <div className="grid grid-cols-1 gap-1">
+                  {[
+                    { icon: '✈️', label: 'Vliegtuig' },
+                    { icon: '🚁', label: 'Helikopter' },
+                    { icon: '🛩️', label: 'Drijvervliegtuig' },
+                    { icon: '🚤', label: 'Vliegboot' },
+                    { icon: '🎮', label: 'UAV / Drone' }
+                  ].map(item => (
+                    <div key={item.label} className="flex items-center gap-2">
+                      <span className="text-sm w-4">{item.icon}</span>
+                      <span className="text-xs text-slate-300">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Preservation Status */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span className="font-semibold text-sm">Behouds Status (gradient overlay)</span>
+                  <span className="font-semibold text-sm">Behouds Status</span>
                 </div>
                 <div className="grid grid-cols-1 gap-1">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.5) 0%, transparent 100%)' }} />
-                    <span className="text-xs text-slate-300">✈️ Nog vliegend</span>
+                    <div className="w-6 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.5) 0%, transparent 100%)' }} />
+                    <span className="text-xs text-slate-300">Nog vliegend</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, transparent 100%)' }} />
-                    <span className="text-xs text-slate-300">🏛️ In museum bewaard</span>
+                    <div className="w-6 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, transparent 100%)' }} />
+                    <span className="text-xs text-slate-300">In museum</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.4) 0%, transparent 100%)' }} />
-                    <span className="text-xs text-slate-300">🔧 Wrakken/resten (intensiteit = score)</span>
+                    <div className="w-6 h-3 rounded" style={{ background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.4) 0%, transparent 100%)' }} />
+                    <span className="text-xs text-slate-300">Wrakken/resten</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-3 rounded bg-slate-700/30" />
-                    <span className="text-xs text-slate-300">Geen resten bekend</span>
+                    <div className="w-6 h-3 rounded bg-slate-700/30" />
+                    <span className="text-xs text-slate-300">Geen resten</span>
                   </div>
                 </div>
               </div>
@@ -1118,10 +1193,10 @@ const AircraftTimeline = () => {
             {/* Header - Fixed */}
             <div className="bg-gradient-to-r from-blue-600 to-orange-600 p-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
-                <Plane className="w-7 h-7 text-white" />
+                <span className="text-3xl">{getAircraftTypeInfo(selectedAircraft.aircraftType).icon}</span>
                 <div>
                   <h2 className="text-xl font-bold text-white">{selectedAircraft.name}</h2>
-                  <p className="text-blue-100 text-sm">{selectedAircraft.user}</p>
+                  <p className="text-blue-100 text-sm">{selectedAircraft.user} • <span className="capitalize">{selectedAircraft.aircraftType}</span></p>
                 </div>
               </div>
               <button
