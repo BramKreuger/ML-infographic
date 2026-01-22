@@ -282,9 +282,9 @@ const AircraftTimeline = () => {
         const wreckAssessment = a['Wrak assesment'] || 0;
         const foto = a.Foto || '';
 
-        // Generate image path based on row index (image001.png, image002.png, etc.)
+        // Generate image path based on row index (image001.jpg, image002.jpg, etc.)
         const imageNumber = String(rowIndex).padStart(3, '0');
-        const localImagePath = `/data_v2.xlsx.files/image${imageNumber}.png`;
+        const localImagePath = `/data_v2.xlsx.files/image${imageNumber}.jpg`;
 
         return {
           name: a.Typenaam,

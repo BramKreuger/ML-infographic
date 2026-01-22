@@ -18,7 +18,11 @@
       "Bash(git rev-list:*)",
       "Bash(git fetch:*)",
       "Bash(git rebase:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(npx --version)",
+      "Bash(npm install:*)",
+      "Bash(node scripts/compress-images.js:*)",
+      "Bash(node scripts/compress-images.cjs:*)"
     ],
     "deny": [],
     "ask": []
