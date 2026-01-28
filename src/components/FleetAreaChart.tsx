@@ -26,6 +26,27 @@ const SERVICE_COLORS: Record<string, string> = {
   'Overig': '#6B7280',
 };
 
+// Aircraft type colors
+const TYPE_COLORS: Record<string, string> = {
+  'Vliegtuig': '#3b82f6',
+  'Helikopter': '#f97316',
+  'Drijvervliegtuig': '#22c55e',
+  'Vliegboot': '#a855f7',
+  'UAV': '#ef4444',
+  'Overig': '#6B7280',
+};
+
+// Normalize aircraft type to category
+const getTypeCategory = (aircraftType: string): string => {
+  const type = aircraftType.toLowerCase();
+  if (type.includes('helikopter')) return 'Helikopter';
+  if (type.includes('vliegboot')) return 'Vliegboot';
+  if (type.includes('drijver')) return 'Drijvervliegtuig';
+  if (type.includes('uav') || type.includes('drone')) return 'UAV';
+  if (type.includes('vliegtuig') || type === '') return 'Vliegtuig';
+  return 'Overig';
+};
+
 // Historical periods for reference lines
 const HISTORICAL_EVENTS = [
   { year: 1913, label: 'Oprichting LVA', color: '#22c55e' },
@@ -48,17 +69,26 @@ const getUserAbbr = (user: string): string => {
 const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
   const [showEvents, setShowEvents] = useState(true);
   const [chartMode, setChartMode] = useState<'types' | 'count'>('count');
+  const [groupBy, setGroupBy] = useState<'dienst' | 'type'>('dienst');
   const [selectedServices, setSelectedServices] = useState<string[]>(['KLu', 'MLD', 'MLKNIL', 'LVA', 'LSK', 'Overig']);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(['Vliegtuig', 'Helikopter', 'Drijvervliegtuig', 'Vliegboot', 'UAV', 'Overig']);
 
   // Generate time series data
   const chartData = useMemo(() => {
     const data: Array<{
       year: number;
+      // Services
       KLu: number;
       MLD: number;
       MLKNIL: number;
       LVA: number;
       LSK: number;
+      // Types
+      Vliegtuig: number;
+      Helikopter: number;
+      Drijvervliegtuig: number;
+      Vliegboot: number;
+      UAV: number;
       Overig: number;
       total: number;
     }> = [];
@@ -71,6 +101,14 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
         'MLKNIL': 0,
         'LVA': 0,
         'LSK': 0,
+      };
+
+      const activeByType: Record<string, number> = {
+        'Vliegtuig': 0,
+        'Helikopter': 0,
+        'Drijvervliegtuig': 0,
+        'Vliegboot': 0,
+        'UAV': 0,
         'Overig': 0,
       };
 
@@ -78,13 +116,21 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
       aircraftData.forEach(aircraft => {
         if (aircraft.startYear <= year && aircraft.endYear >= year) {
           const service = getUserAbbr(aircraft.user);
-          if (chartMode === 'types') {
-            activeByService[service]++;
-          } else {
-            activeByService[service] += aircraft.totalCount;
+          const typeCategory = getTypeCategory(aircraft.aircraftType || '');
+          const count = chartMode === 'types' ? 1 : aircraft.totalCount;
+
+          // Count by service (use Overig only for unknown services)
+          if (service in activeByService) {
+            activeByService[service] += count;
           }
+
+          // Count by type
+          activeByType[typeCategory] += count;
         }
       });
+
+      const serviceTotal = Object.values(activeByService).reduce((a, b) => a + b, 0);
+      const typeTotal = Object.values(activeByType).reduce((a, b) => a + b, 0);
 
       data.push({
         year,
@@ -93,13 +139,18 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
         MLKNIL: activeByService['MLKNIL'],
         LVA: activeByService['LVA'],
         LSK: activeByService['LSK'],
-        Overig: activeByService['Overig'],
-        total: Object.values(activeByService).reduce((a, b) => a + b, 0),
+        Vliegtuig: activeByType['Vliegtuig'],
+        Helikopter: activeByType['Helikopter'],
+        Drijvervliegtuig: activeByType['Drijvervliegtuig'],
+        Vliegboot: activeByType['Vliegboot'],
+        UAV: activeByType['UAV'],
+        Overig: groupBy === 'dienst' ? 0 : activeByType['Overig'],
+        total: groupBy === 'dienst' ? serviceTotal : typeTotal,
       });
     }
 
     return data;
-  }, [aircraftData, chartMode]);
+  }, [aircraftData, chartMode, groupBy]);
 
   // Calculate peak stats
   const peakStats = useMemo(() => {
@@ -128,6 +179,15 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
       prev.includes(service)
         ? prev.filter(s => s !== service)
         : [...prev, service]
+    );
+  };
+
+  // Toggle type visibility
+  const toggleType = (type: string) => {
+    setSelectedTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
     );
   };
 
@@ -193,6 +253,22 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
             </button>
           </div>
 
+          {/* Group by toggle */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setGroupBy('dienst')}
+              className={`px-2 py-1 rounded text-xs ${groupBy === 'dienst' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+            >
+              Dienst
+            </button>
+            <button
+              onClick={() => setGroupBy('type')}
+              className={`px-2 py-1 rounded text-xs ${groupBy === 'type' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+            >
+              Type
+            </button>
+          </div>
+
           <button
             onClick={() => setShowEvents(prev => !prev)}
             className={`px-2 py-1 rounded text-xs ${showEvents ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
@@ -200,29 +276,53 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
             Events
           </button>
 
-          {/* Service Toggle - compact */}
+          {/* Category Toggle - show services or types based on groupBy */}
           <div className="flex gap-1">
-            {Object.entries(SERVICE_COLORS).map(([service, color]) => (
-              <button
-                key={service}
-                onClick={() => toggleService(service)}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
-                  selectedServices.includes(service)
-                    ? 'bg-slate-700 text-white'
-                    : 'bg-slate-900 text-slate-500'
-                }`}
-                title={service}
-              >
-                <div
-                  className="w-2 h-2 rounded"
-                  style={{
-                    backgroundColor: color,
-                    opacity: selectedServices.includes(service) ? 1 : 0.3
-                  }}
-                />
-                <span className="hidden lg:inline">{service}</span>
-              </button>
-            ))}
+            {groupBy === 'dienst' ? (
+              Object.entries(SERVICE_COLORS).filter(([service]) => service !== 'Overig').map(([service, color]) => (
+                <button
+                  key={service}
+                  onClick={() => toggleService(service)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                    selectedServices.includes(service)
+                      ? 'bg-slate-700 text-white'
+                      : 'bg-slate-900 text-slate-500'
+                  }`}
+                  title={service}
+                >
+                  <div
+                    className="w-2 h-2 rounded"
+                    style={{
+                      backgroundColor: color,
+                      opacity: selectedServices.includes(service) ? 1 : 0.3
+                    }}
+                  />
+                  <span className="hidden lg:inline">{service}</span>
+                </button>
+              ))
+            ) : (
+              Object.entries(TYPE_COLORS).map(([type, color]) => (
+                <button
+                  key={type}
+                  onClick={() => toggleType(type)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                    selectedTypes.includes(type)
+                      ? 'bg-slate-700 text-white'
+                      : 'bg-slate-900 text-slate-500'
+                  }`}
+                  title={type}
+                >
+                  <div
+                    className="w-2 h-2 rounded"
+                    style={{
+                      backgroundColor: color,
+                      opacity: selectedTypes.includes(type) ? 1 : 0.3
+                    }}
+                  />
+                  <span className="hidden lg:inline">{type}</span>
+                </button>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -236,7 +336,13 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
           >
             <defs>
               {Object.entries(SERVICE_COLORS).map(([service, color]) => (
-                <linearGradient key={service} id={`gradient-${service}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient key={`service-${service}`} id={`gradient-${service}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={color} stopOpacity={0.8} />
+                  <stop offset="95%" stopColor={color} stopOpacity={0.2} />
+                </linearGradient>
+              ))}
+              {Object.entries(TYPE_COLORS).map(([type, color]) => (
+                <linearGradient key={`type-${type}`} id={`gradient-type-${type}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={color} stopOpacity={0.8} />
                   <stop offset="95%" stopColor={color} stopOpacity={0.2} />
                 </linearGradient>
@@ -284,66 +390,123 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
               />
             ))}
 
-            {/* Stacked areas - reverse order for proper layering */}
-            {selectedServices.includes('Overig') && (
-              <Area
-                type="monotone"
-                dataKey="Overig"
-                stackId="1"
-                stroke={SERVICE_COLORS.Overig}
-                fill={`url(#gradient-Overig)`}
-                name="Overig"
-              />
-            )}
-            {selectedServices.includes('LSK') && (
-              <Area
-                type="monotone"
-                dataKey="LSK"
-                stackId="1"
-                stroke={SERVICE_COLORS.LSK}
-                fill={`url(#gradient-LSK)`}
-                name="LSK"
-              />
-            )}
-            {selectedServices.includes('LVA') && (
-              <Area
-                type="monotone"
-                dataKey="LVA"
-                stackId="1"
-                stroke={SERVICE_COLORS.LVA}
-                fill={`url(#gradient-LVA)`}
-                name="LVA"
-              />
-            )}
-            {selectedServices.includes('MLKNIL') && (
-              <Area
-                type="monotone"
-                dataKey="MLKNIL"
-                stackId="1"
-                stroke={SERVICE_COLORS.MLKNIL}
-                fill={`url(#gradient-MLKNIL)`}
-                name="MLKNIL"
-              />
-            )}
-            {selectedServices.includes('MLD') && (
-              <Area
-                type="monotone"
-                dataKey="MLD"
-                stackId="1"
-                stroke={SERVICE_COLORS.MLD}
-                fill={`url(#gradient-MLD)`}
-                name="MLD"
-              />
-            )}
-            {selectedServices.includes('KLu') && (
-              <Area
-                type="monotone"
-                dataKey="KLu"
-                stackId="1"
-                stroke={SERVICE_COLORS.KLu}
-                fill={`url(#gradient-KLu)`}
-                name="KLu"
-              />
+            {/* Stacked areas - render based on groupBy mode */}
+            {groupBy === 'dienst' ? (
+              <>
+                {selectedServices.includes('LSK') && (
+                  <Area
+                    type="monotone"
+                    dataKey="LSK"
+                    stackId="1"
+                    stroke={SERVICE_COLORS.LSK}
+                    fill={`url(#gradient-LSK)`}
+                    name="LSK"
+                  />
+                )}
+                {selectedServices.includes('LVA') && (
+                  <Area
+                    type="monotone"
+                    dataKey="LVA"
+                    stackId="1"
+                    stroke={SERVICE_COLORS.LVA}
+                    fill={`url(#gradient-LVA)`}
+                    name="LVA"
+                  />
+                )}
+                {selectedServices.includes('MLKNIL') && (
+                  <Area
+                    type="monotone"
+                    dataKey="MLKNIL"
+                    stackId="1"
+                    stroke={SERVICE_COLORS.MLKNIL}
+                    fill={`url(#gradient-MLKNIL)`}
+                    name="MLKNIL"
+                  />
+                )}
+                {selectedServices.includes('MLD') && (
+                  <Area
+                    type="monotone"
+                    dataKey="MLD"
+                    stackId="1"
+                    stroke={SERVICE_COLORS.MLD}
+                    fill={`url(#gradient-MLD)`}
+                    name="MLD"
+                  />
+                )}
+                {selectedServices.includes('KLu') && (
+                  <Area
+                    type="monotone"
+                    dataKey="KLu"
+                    stackId="1"
+                    stroke={SERVICE_COLORS.KLu}
+                    fill={`url(#gradient-KLu)`}
+                    name="KLu"
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                {selectedTypes.includes('Overig') && (
+                  <Area
+                    type="monotone"
+                    dataKey="Overig"
+                    stackId="1"
+                    stroke={TYPE_COLORS.Overig}
+                    fill={`url(#gradient-type-Overig)`}
+                    name="Overig"
+                  />
+                )}
+                {selectedTypes.includes('UAV') && (
+                  <Area
+                    type="monotone"
+                    dataKey="UAV"
+                    stackId="1"
+                    stroke={TYPE_COLORS.UAV}
+                    fill={`url(#gradient-type-UAV)`}
+                    name="UAV"
+                  />
+                )}
+                {selectedTypes.includes('Vliegboot') && (
+                  <Area
+                    type="monotone"
+                    dataKey="Vliegboot"
+                    stackId="1"
+                    stroke={TYPE_COLORS.Vliegboot}
+                    fill={`url(#gradient-type-Vliegboot)`}
+                    name="Vliegboot"
+                  />
+                )}
+                {selectedTypes.includes('Drijvervliegtuig') && (
+                  <Area
+                    type="monotone"
+                    dataKey="Drijvervliegtuig"
+                    stackId="1"
+                    stroke={TYPE_COLORS.Drijvervliegtuig}
+                    fill={`url(#gradient-type-Drijvervliegtuig)`}
+                    name="Drijvervliegtuig"
+                  />
+                )}
+                {selectedTypes.includes('Helikopter') && (
+                  <Area
+                    type="monotone"
+                    dataKey="Helikopter"
+                    stackId="1"
+                    stroke={TYPE_COLORS.Helikopter}
+                    fill={`url(#gradient-type-Helikopter)`}
+                    name="Helikopter"
+                  />
+                )}
+                {selectedTypes.includes('Vliegtuig') && (
+                  <Area
+                    type="monotone"
+                    dataKey="Vliegtuig"
+                    stackId="1"
+                    stroke={TYPE_COLORS.Vliegtuig}
+                    fill={`url(#gradient-type-Vliegtuig)`}
+                    name="Vliegtuig"
+                  />
+                )}
+              </>
             )}
           </AreaChart>
         </ResponsiveContainer>

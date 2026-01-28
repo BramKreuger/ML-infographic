@@ -29,6 +29,16 @@ const SERVICE_COLORS: Record<string, string> = {
   'Overig': '#6B7280',
 };
 
+// Aircraft type colors
+const TYPE_COLORS: Record<string, string> = {
+  'Vliegtuig': '#3b82f6',
+  'Helikopter': '#f97316',
+  'Drijvervliegtuig': '#22c55e',
+  'Vliegboot': '#a855f7',
+  'UAV': '#ef4444',
+  'Overig': '#6B7280',
+};
+
 // Get user abbreviation
 const getUserAbbr = (user: string): string => {
   if (user.includes('KLu') || user.includes('Klu') || user.includes('KLU')) return 'KLu';
@@ -39,26 +49,50 @@ const getUserAbbr = (user: string): string => {
   return 'Overig';
 };
 
+// Normalize aircraft type to category
+const getTypeCategory = (aircraftType: string): string => {
+  const type = aircraftType.toLowerCase();
+  if (type.includes('helikopter')) return 'Helikopter';
+  if (type.includes('vliegboot')) return 'Vliegboot';
+  if (type.includes('drijver')) return 'Drijvervliegtuig';
+  if (type.includes('uav') || type.includes('drone')) return 'UAV';
+  if (type.includes('vliegtuig') || type === '') return 'Vliegtuig';
+  return 'Overig';
+};
+
 const FleetBubbleChart: React.FC<FleetBubbleChartProps> = ({ aircraftData, onAircraftClick }) => {
   const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [colorBy, setColorBy] = useState<'dienst' | 'type'>('dienst');
 
   // Transform data for scatter chart
   const scatterData = useMemo(() => {
-    return aircraftData.map(aircraft => ({
-      ...aircraft,
-      x: aircraft.startYear,
-      y: aircraft.endYear - aircraft.startYear, // Service duration
-      z: Math.max(aircraft.totalCount, 5), // Bubble size (min 5 for visibility)
-      service: getUserAbbr(aircraft.user),
-      color: SERVICE_COLORS[getUserAbbr(aircraft.user)],
-    }));
-  }, [aircraftData]);
+    return aircraftData.map(aircraft => {
+      const service = getUserAbbr(aircraft.user);
+      const typeCategory = getTypeCategory(aircraft.aircraftType || '');
+      return {
+        ...aircraft,
+        x: aircraft.startYear,
+        y: aircraft.endYear - aircraft.startYear, // Service duration
+        z: Math.max(aircraft.totalCount, 5), // Bubble size (min 5 for visibility)
+        service,
+        typeCategory,
+        color: colorBy === 'dienst' ? SERVICE_COLORS[service] : TYPE_COLORS[typeCategory],
+      };
+    });
+  }, [aircraftData, colorBy]);
 
-  // Filter by selected service
+  // Filter by selected service and type
   const filteredData = useMemo(() => {
-    if (!selectedService) return scatterData;
-    return scatterData.filter(d => d.service === selectedService);
-  }, [scatterData, selectedService]);
+    let data = scatterData;
+    if (selectedService) {
+      data = data.filter(d => d.service === selectedService);
+    }
+    if (selectedType) {
+      data = data.filter(d => d.typeCategory === selectedType);
+    }
+    return data;
+  }, [scatterData, selectedService, selectedType]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -107,7 +141,7 @@ const FleetBubbleChart: React.FC<FleetBubbleChartProps> = ({ aircraftData, onAir
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-slate-400">Type:</span>
-              <span className="text-white capitalize">{data.aircraftType}</span>
+              <span className="text-white">{data.typeCategory}</span>
             </div>
           </div>
           <div className="mt-2 pt-2 border-t border-slate-700 text-xs text-slate-500">
@@ -122,15 +156,36 @@ const FleetBubbleChart: React.FC<FleetBubbleChartProps> = ({ aircraftData, onAir
   return (
     <div className="h-full bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700 p-4 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
+      <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Target className="w-5 h-5 text-blue-400" />
           <h2 className="text-lg font-bold text-white">Vloot Analyse</h2>
           <span className="text-slate-400 text-xs">X: Introductie | Y: Diensttijd | Grootte: Aantal</span>
         </div>
 
+        {/* Color by toggle */}
+        <div className="flex items-center gap-1">
+          <span className="text-slate-400 text-xs mr-1">Kleur:</span>
+          <button
+            onClick={() => setColorBy('dienst')}
+            className={`px-2 py-1 rounded text-xs ${colorBy === 'dienst' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+          >
+            Dienst
+          </button>
+          <button
+            onClick={() => setColorBy('type')}
+            className={`px-2 py-1 rounded text-xs ${colorBy === 'type' ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+          >
+            Type
+          </button>
+        </div>
+      </div>
+
+      {/* Filters Row */}
+      <div className="flex items-center justify-between mb-3 flex-shrink-0 gap-2">
         {/* Service Filter */}
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
+          <span className="text-slate-400 text-xs mr-1">Dienst:</span>
           <button
             onClick={() => setSelectedService(null)}
             className={`px-2 py-1 rounded text-xs transition-all ${
@@ -141,7 +196,7 @@ const FleetBubbleChart: React.FC<FleetBubbleChartProps> = ({ aircraftData, onAir
           >
             Alle
           </button>
-          {Object.entries(SERVICE_COLORS).map(([service, color]) => (
+          {Object.entries(SERVICE_COLORS).filter(([service]) => service !== 'Overig').map(([service, color]) => (
             <button
               key={service}
               onClick={() => setSelectedService(selectedService === service ? null : service)}
@@ -161,6 +216,43 @@ const FleetBubbleChart: React.FC<FleetBubbleChartProps> = ({ aircraftData, onAir
                 style={{ backgroundColor: color }}
               />
               <span className="hidden lg:inline">{service}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Type Filter */}
+        <div className="flex items-center gap-1">
+          <span className="text-slate-400 text-xs mr-1">Type:</span>
+          <button
+            onClick={() => setSelectedType(null)}
+            className={`px-2 py-1 rounded text-xs transition-all ${
+              !selectedType
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            Alle
+          </button>
+          {Object.entries(TYPE_COLORS).map(([type, color]) => (
+            <button
+              key={type}
+              onClick={() => setSelectedType(selectedType === type ? null : type)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                selectedType === type
+                  ? 'bg-slate-600 text-white ring-1'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+              style={{
+                outlineColor: selectedType === type ? color : undefined,
+                outlineWidth: selectedType === type ? '2px' : undefined,
+                outlineStyle: selectedType === type ? 'solid' : undefined
+              }}
+            >
+              <div
+                className="w-2 h-2 rounded"
+                style={{ backgroundColor: color }}
+              />
+              <span className="hidden lg:inline">{type}</span>
             </button>
           ))}
         </div>
