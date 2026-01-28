@@ -1,8 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Filter, Info, Plane, Loader2, ZoomIn, ZoomOut, BarChart3 } from 'lucide-react';
+import { Search, Filter, Info, Plane, Loader2, ZoomIn, ZoomOut, TrendingUp, Target } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { fetchAircraftInfo } from './services/ipmsService';
-import VisualizationDashboard from './components/VisualizationDashboard';
+import FleetAreaChart from './components/FleetAreaChart';
+import FleetBubbleChart from './components/FleetBubbleChart';
+
+type ViewType = 'timeline' | 'area' | 'bubble';
 
 // Type definitions
 interface Aircraft {
@@ -155,7 +158,7 @@ const AircraftTimeline = () => {
   const [aircraftInfo, setAircraftInfo] = useState<AircraftInfo | null>(null);
   const [isLoadingInfo, setIsLoadingInfo] = useState(false);
   const [selectedType, setSelectedType] = useState('Alle');
-  const [showVisualization, setShowVisualization] = useState(false);
+  const [activeView, setActiveView] = useState<ViewType>('timeline');
 
   // Generate IPMS search link
   const getIPMSSearchLink = (aircraftName: string) => {
@@ -556,7 +559,7 @@ const AircraftTimeline = () => {
   }, [aircraftData]);
 
   // Timeline constants
-  const minYear = 1817;
+  const minYear = 1917;
   const maxYear = 2025;
   const yearRange = maxYear - minYear;
 
@@ -663,48 +666,72 @@ const AircraftTimeline = () => {
     );
   }
 
-  // Show visualization dashboard
-  if (showVisualization) {
-    return (
-      <VisualizationDashboard
-        aircraftData={aircraftData}
-        onBack={() => setShowVisualization(false)}
-        onAircraftClick={(aircraft) => {
-          setShowVisualization(false);
-          handleAircraftClick(aircraft);
-        }}
-      />
-    );
-  }
-
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white flex flex-col">
       <style>{scrollbarStyles}</style>
-      {/* Header */}
-      <div className="max-w-7xl mx-auto w-full px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Plane className="w-6 h-6 text-orange-400" />
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-orange-400 bg-clip-text text-transparent">
-            Nederlandse Militaire Luchtvaart
-          </h1>
-          <span className="text-slate-400 text-sm ml-2">1817-2025</span>
+      {/* Header with Tabs */}
+      <div className="flex-shrink-0 bg-slate-900/95 backdrop-blur border-b border-slate-700">
+        <div className="max-w-7xl mx-auto w-full px-6 py-3">
+          <div className="flex items-center justify-between">
+            {/* Logo & Title */}
+            <div className="flex items-center gap-2">
+              <Plane className="w-6 h-6 text-orange-400" />
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-orange-400 bg-clip-text text-transparent">
+                Nederlandse Militaire Luchtvaart
+              </h1>
+              <span className="text-slate-400 text-sm ml-2">1917-2025</span>
+            </div>
+
+            {/* View Tabs */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveView('timeline')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+                  activeView === 'timeline'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50'
+                }`}
+              >
+                <Plane className="w-4 h-4" />
+                <span>Tijdlijn</span>
+              </button>
+              <button
+                onClick={() => setActiveView('area')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+                  activeView === 'area'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span>Vlootsterkte</span>
+              </button>
+              <button
+                onClick={() => setActiveView('bubble')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+                  activeView === 'bubble'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700/50'
+                }`}
+              >
+                <Target className="w-4 h-4" />
+                <span>Bubble Analyse</span>
+              </button>
+            </div>
+          </div>
         </div>
-        <button
-          onClick={() => setShowVisualization(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold transition-all shadow-lg hover:shadow-purple-500/25"
-        >
-          <BarChart3 className="w-5 h-5" />
-          <span>Visualisaties</span>
-        </button>
       </div>
 
-      {/* Controls */}
-      <div className="max-w-7xl mx-auto w-full px-4 pb-2">
-        <div className="bg-slate-800/50 backdrop-blur rounded-lg p-2 border border-slate-700">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+      {/* Timeline View */}
+      {activeView === 'timeline' && (
+        <>
+          {/* Controls */}
+          <div className="max-w-7xl mx-auto w-full px-6 pb-3">
+            <div className="bg-slate-800/50 backdrop-blur rounded-lg p-2 border border-slate-700">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search */}
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Zoek..."
@@ -802,7 +829,7 @@ const AircraftTimeline = () => {
       </div>
 
       {/* Timeline */}
-      <div className="w-full px-4 flex-1 flex flex-col min-h-0 mb-8">
+      <div className="w-full px-6 flex-1 flex flex-col min-h-0 mb-8">
         <div className="bg-slate-800/30 backdrop-blur rounded-xl border border-slate-700 overflow-hidden flex-1 flex flex-col relative">
           {/* Period Labels - STICKY BANNER */}
           <div
@@ -1110,7 +1137,7 @@ const AircraftTimeline = () => {
 
                 {/* Year labels on minimap */}
                 <div className="absolute inset-0 pointer-events-none">
-                  {[1820, 1880, 1940, 2000].map(year => (
+                  {[1920, 1960, 2000].map(year => (
                     <div
                       key={`minimap-year-${year}`}
                       className="absolute top-0 bottom-0 border-l border-slate-500/30"
@@ -1205,6 +1232,25 @@ const AircraftTimeline = () => {
           </div>
         )}
       </div>
+        </>
+      )}
+
+      {/* Area Chart View */}
+      {activeView === 'area' && (
+        <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-6 py-4">
+          <FleetAreaChart aircraftData={aircraftData} />
+        </div>
+      )}
+
+      {/* Bubble Chart View */}
+      {activeView === 'bubble' && (
+        <div className="flex-1 min-h-0 max-w-7xl w-full mx-auto px-6 py-4">
+          <FleetBubbleChart
+            aircraftData={aircraftData}
+            onAircraftClick={handleAircraftClick}
+          />
+        </div>
+      )}
 
       {/* Aircraft Info Panel */}
       {selectedAircraft && (

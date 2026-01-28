@@ -41,7 +41,7 @@ const FleetEvolution: React.FC<FleetEvolutionProps> = ({ aircraftData }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playSpeed, setPlaySpeed] = useState(200); // ms per year
 
-  const minYear = 1817;
+  const minYear = 1917;
   const maxYear = 2025;
 
   // Get active aircraft for current year
@@ -130,151 +130,144 @@ const FleetEvolution: React.FC<FleetEvolutionProps> = ({ aircraftData }) => {
   const period = getCurrentPeriod(currentYear);
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Clock className="w-6 h-6 text-blue-400" />
-            Vloot Evolutie
-          </h2>
-          <p className="text-slate-400 text-sm mt-1">
-            Bekijk hoe de vloot verandert door de jaren heen
-          </p>
+    <div className="h-full bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700 p-4 flex flex-col">
+      {/* Header Row */}
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <Clock className="w-5 h-5 text-blue-400" />
+          <h2 className="text-lg font-bold text-white">Vloot Evolutie</h2>
         </div>
 
         {/* Period indicator */}
-        <div className={`px-4 py-2 rounded-lg bg-${period.color}-500/20 border border-${period.color}-500/30`}>
-          <span className={`text-${period.color}-400 font-semibold`}>{period.name}</span>
+        <div className={`px-3 py-1 rounded-lg bg-${period.color}-500/20 border border-${period.color}-500/30`}>
+          <span className={`text-${period.color}-400 font-semibold text-sm`}>{period.name}</span>
+        </div>
+
+        {/* Year Display */}
+        <div className="text-center">
+          <div className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-orange-400 bg-clip-text text-transparent">
+            {currentYear}
+          </div>
+          <div className="text-slate-400 text-xs">
+            {activeAircraft.length} types actief
+          </div>
         </div>
       </div>
 
-      {/* Year Display */}
-      <div className="text-center mb-6">
-        <div className="text-8xl font-bold bg-gradient-to-r from-blue-400 to-orange-400 bg-clip-text text-transparent">
-          {currentYear}
-        </div>
-        <div className="text-slate-400 mt-2">
-          {activeAircraft.length} vliegtuigtypes actief
-        </div>
-      </div>
-
-      {/* Timeline Slider */}
-      <div className="mb-6">
-        <input
-          type="range"
-          min={minYear}
-          max={maxYear}
-          value={currentYear}
-          onChange={(e) => setCurrentYear(parseInt(e.target.value))}
-          className="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-          style={{
-            background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((currentYear - minYear) / (maxYear - minYear)) * 100}%, #334155 ${((currentYear - minYear) / (maxYear - minYear)) * 100}%, #334155 100%)`
-          }}
-        />
-        <div className="flex justify-between text-xs text-slate-500 mt-1">
-          <span>{minYear}</span>
-          <span>1900</span>
-          <span>1950</span>
-          <span>2000</span>
-          <span>{maxYear}</span>
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="flex items-center justify-center gap-4 mb-6">
+      {/* Timeline Slider + Controls Row */}
+      <div className="flex items-center gap-3 mb-3 flex-shrink-0">
         <button
           onClick={() => setCurrentYear(minYear)}
-          className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+          className="p-1.5 rounded bg-slate-700 hover:bg-slate-600 text-white transition-colors"
           title="Naar begin"
         >
-          <SkipBack className="w-5 h-5" />
+          <SkipBack className="w-4 h-4" />
         </button>
 
         <button
           onClick={() => setCurrentYear(prev => Math.max(minYear, prev - 10))}
-          className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm transition-colors"
+          className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white text-xs transition-colors"
         >
           -10
         </button>
 
         <button
           onClick={() => setIsPlaying(prev => !prev)}
-          className={`p-4 rounded-full ${isPlaying ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
+          className={`p-2 rounded-full ${isPlaying ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}
         >
-          {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
         </button>
 
         <button
           onClick={() => setCurrentYear(prev => Math.min(maxYear, prev + 10))}
-          className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm transition-colors"
+          className="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white text-xs transition-colors"
         >
           +10
         </button>
 
         <button
           onClick={() => setCurrentYear(maxYear)}
-          className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white transition-colors"
+          className="p-1.5 rounded bg-slate-700 hover:bg-slate-600 text-white transition-colors"
           title="Naar einde"
         >
-          <SkipForward className="w-5 h-5" />
+          <SkipForward className="w-4 h-4" />
         </button>
-      </div>
 
-      {/* Speed Control */}
-      <div className="flex items-center justify-center gap-4 mb-6">
-        <span className="text-slate-400 text-sm">Snelheid:</span>
-        {[{ label: '0.5x', value: 400 }, { label: '1x', value: 200 }, { label: '2x', value: 100 }, { label: '4x', value: 50 }].map(speed => (
-          <button
-            key={speed.value}
-            onClick={() => setPlaySpeed(speed.value)}
-            className={`px-3 py-1 rounded text-sm ${playSpeed === speed.value ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-          >
-            {speed.label}
-          </button>
-        ))}
+        {/* Timeline Slider */}
+        <div className="flex-1">
+          <input
+            type="range"
+            min={minYear}
+            max={maxYear}
+            value={currentYear}
+            onChange={(e) => setCurrentYear(parseInt(e.target.value))}
+            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            style={{
+              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((currentYear - minYear) / (maxYear - minYear)) * 100}%, #334155 ${((currentYear - minYear) / (maxYear - minYear)) * 100}%, #334155 100%)`
+            }}
+          />
+          <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
+            <span>{minYear}</span>
+            <span>1950</span>
+            <span>1980</span>
+            <span>2000</span>
+            <span>{maxYear}</span>
+          </div>
+        </div>
+
+        {/* Speed Control */}
+        <div className="flex items-center gap-1">
+          {[{ label: '1x', value: 200 }, { label: '2x', value: 100 }, { label: '4x', value: 50 }].map(speed => (
+            <button
+              key={speed.value}
+              onClick={() => setPlaySpeed(speed.value)}
+              className={`px-2 py-0.5 rounded text-xs ${playSpeed === speed.value ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+            >
+              {speed.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Stats by Service */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-6 gap-2 mb-3 flex-shrink-0">
         {Object.entries(statsByService).map(([service, data]) => (
           <div
             key={service}
-            className="bg-slate-900/50 rounded-lg p-3 border border-slate-700"
-            style={{ borderLeftColor: getUserColor(service), borderLeftWidth: '4px' }}
+            className="bg-slate-900/50 rounded-lg p-2 border border-slate-700"
+            style={{ borderLeftColor: getUserColor(service), borderLeftWidth: '3px' }}
           >
-            <div className="text-xs text-slate-400">{service}</div>
-            <div className="text-2xl font-bold text-white">{data.count}</div>
-            <div className="text-xs text-slate-500">types</div>
+            <div className="text-[10px] text-slate-400">{service}</div>
+            <div className="text-lg font-bold text-white">{data.count}</div>
           </div>
         ))}
       </div>
 
-      {/* Introductions & Retirements */}
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* Main Content Grid */}
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-3">
         {/* New Introductions */}
-        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-green-400 font-semibold flex items-center gap-2">
-              <span className="text-lg">+</span>
+        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
+            <h3 className="text-green-400 font-semibold text-sm flex items-center gap-1">
+              <span>+</span>
               Nieuw in {currentYear}
             </h3>
-            <span className="text-green-400 bg-green-500/20 px-2 py-0.5 rounded text-sm">
+            <span className="text-green-400 bg-green-500/20 px-2 py-0.5 rounded text-xs">
               {introducedThisYear.length}
             </span>
           </div>
-          <div className="max-h-40 overflow-y-auto space-y-1">
+          <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
             {introducedThisYear.length === 0 ? (
-              <p className="text-slate-500 text-sm italic">Geen nieuwe vliegtuigen dit jaar</p>
+              <p className="text-slate-500 text-xs italic">Geen nieuwe vliegtuigen</p>
             ) : (
               introducedThisYear.map((a, i) => (
                 <div
                   key={`intro-${i}`}
                   className="flex items-center justify-between bg-slate-900/50 rounded px-2 py-1"
                 >
-                  <span className="text-white text-sm">{a.name}</span>
+                  <span className="text-white text-xs truncate">{a.name}</span>
                   <span
-                    className="text-xs px-2 py-0.5 rounded"
+                    className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0"
                     style={{ backgroundColor: getUserColor(a.user) + '40', color: getUserColor(a.user) }}
                   >
                     {getUserAbbr(a.user)}
@@ -286,28 +279,28 @@ const FleetEvolution: React.FC<FleetEvolutionProps> = ({ aircraftData }) => {
         </div>
 
         {/* Retirements */}
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-red-400 font-semibold flex items-center gap-2">
-              <span className="text-lg">-</span>
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
+            <h3 className="text-red-400 font-semibold text-sm flex items-center gap-1">
+              <span>-</span>
               Uit dienst in {currentYear}
             </h3>
-            <span className="text-red-400 bg-red-500/20 px-2 py-0.5 rounded text-sm">
+            <span className="text-red-400 bg-red-500/20 px-2 py-0.5 rounded text-xs">
               {retiredThisYear.length}
             </span>
           </div>
-          <div className="max-h-40 overflow-y-auto space-y-1">
+          <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
             {retiredThisYear.length === 0 ? (
-              <p className="text-slate-500 text-sm italic">Geen vliegtuigen uit dienst dit jaar</p>
+              <p className="text-slate-500 text-xs italic">Geen vliegtuigen uit dienst</p>
             ) : (
               retiredThisYear.map((a, i) => (
                 <div
                   key={`retire-${i}`}
                   className="flex items-center justify-between bg-slate-900/50 rounded px-2 py-1"
                 >
-                  <span className="text-white text-sm">{a.name}</span>
-                  <span className="text-slate-400 text-xs">
-                    {a.endYear - a.startYear} jaar dienst
+                  <span className="text-white text-xs truncate">{a.name}</span>
+                  <span className="text-slate-400 text-[10px] flex-shrink-0">
+                    {a.endYear - a.startYear}j
                   </span>
                 </div>
               ))
@@ -317,28 +310,23 @@ const FleetEvolution: React.FC<FleetEvolutionProps> = ({ aircraftData }) => {
       </div>
 
       {/* Active Fleet Visual */}
-      <div className="mt-6">
-        <h3 className="text-slate-400 text-sm mb-3">Actieve vloot ({activeAircraft.length} types)</h3>
-        <div className="flex flex-wrap gap-1">
-          {activeAircraft.slice(0, 100).map((a, i) => (
+      <div className="mt-3 flex-shrink-0">
+        <div className="flex items-center gap-2 mb-1">
+          <h3 className="text-slate-400 text-xs">Actieve vloot ({activeAircraft.length} types)</h3>
+        </div>
+        <div className="flex flex-wrap gap-0.5">
+          {activeAircraft.slice(0, 80).map((a, i) => (
             <div
               key={`active-${i}`}
-              className="w-3 h-3 rounded-sm transition-all duration-300 hover:scale-150 cursor-pointer"
+              className="w-2.5 h-2.5 rounded-sm transition-all duration-300 hover:scale-150 cursor-pointer"
               style={{ backgroundColor: getUserColor(a.user) }}
               title={`${a.name} (${a.user})`}
             />
           ))}
-          {activeAircraft.length > 100 && (
-            <span className="text-slate-500 text-xs ml-2">+{activeAircraft.length - 100} meer</span>
+          {activeAircraft.length > 80 && (
+            <span className="text-slate-500 text-[10px] ml-1">+{activeAircraft.length - 80}</span>
           )}
         </div>
-      </div>
-
-      {/* Keyboard hints */}
-      <div className="mt-4 text-center text-xs text-slate-500">
-        <span className="bg-slate-700 px-2 py-0.5 rounded mr-2">Space</span> Play/Pause
-        <span className="bg-slate-700 px-2 py-0.5 rounded mx-2 ml-4">←</span>
-        <span className="bg-slate-700 px-2 py-0.5 rounded mr-2">→</span> Navigeer
       </div>
     </div>
   );

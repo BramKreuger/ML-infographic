@@ -11,7 +11,7 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
-import { Circle, Target } from 'lucide-react';
+import { Target } from 'lucide-react';
 import { Aircraft } from '../types/aircraft';
 
 interface FleetBubbleChartProps {
@@ -120,58 +120,54 @@ const FleetBubbleChart: React.FC<FleetBubbleChartProps> = ({ aircraftData, onAir
   };
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700 p-6">
+    <div className="h-full bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700 p-4 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Target className="w-6 h-6 text-blue-400" />
-            Vloot Analyse
-          </h2>
-          <p className="text-slate-400 text-sm mt-1">
-            X: Introductiejaar | Y: Diensttijd | Grootte: Aantal vliegtuigen
-          </p>
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <Target className="w-5 h-5 text-blue-400" />
+          <h2 className="text-lg font-bold text-white">Vloot Analyse</h2>
+          <span className="text-slate-400 text-xs">X: Introductie | Y: Diensttijd | Grootte: Aantal</span>
+        </div>
+
+        {/* Service Filter */}
+        <div className="flex gap-1">
+          <button
+            onClick={() => setSelectedService(null)}
+            className={`px-2 py-1 rounded text-xs transition-all ${
+              !selectedService
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            Alle
+          </button>
+          {Object.entries(SERVICE_COLORS).map(([service, color]) => (
+            <button
+              key={service}
+              onClick={() => setSelectedService(selectedService === service ? null : service)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                selectedService === service
+                  ? 'bg-slate-600 text-white ring-1'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+              style={{
+                outlineColor: selectedService === service ? color : undefined,
+                outlineWidth: selectedService === service ? '2px' : undefined,
+                outlineStyle: selectedService === service ? 'solid' : undefined
+              }}
+            >
+              <div
+                className="w-2 h-2 rounded"
+                style={{ backgroundColor: color }}
+              />
+              <span className="hidden lg:inline">{service}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Service Filter */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <button
-          onClick={() => setSelectedService(null)}
-          className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
-            !selectedService
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-          }`}
-        >
-          Alle diensten
-        </button>
-        {Object.entries(SERVICE_COLORS).map(([service, color]) => (
-          <button
-            key={service}
-            onClick={() => setSelectedService(selectedService === service ? null : service)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${
-              selectedService === service
-                ? 'bg-slate-600 text-white ring-2'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
-            style={{
-              outlineColor: selectedService === service ? color : undefined,
-              outlineWidth: selectedService === service ? '2px' : undefined,
-              outlineStyle: selectedService === service ? 'solid' : undefined
-            }}
-          >
-            <div
-              className="w-3 h-3 rounded"
-              style={{ backgroundColor: color }}
-            />
-            {service}
-          </button>
-        ))}
-      </div>
-
       {/* Chart */}
-      <div className="h-[500px]">
+      <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart
             margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
@@ -274,52 +270,32 @@ const FleetBubbleChart: React.FC<FleetBubbleChartProps> = ({ aircraftData, onAir
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+      <div className="grid grid-cols-3 gap-2 mt-3 flex-shrink-0">
         {/* Longest serving */}
-        <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-lg p-4 border border-blue-500/30">
-          <div className="text-blue-400 text-xs font-semibold mb-1">Langste dienst</div>
-          <div className="text-white font-bold text-lg">{stats.longestService?.name}</div>
-          <div className="text-blue-300 text-2xl font-bold">
+        <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-lg p-2 border border-blue-500/30">
+          <div className="text-blue-400 text-[10px] font-semibold">Langste dienst</div>
+          <div className="text-white font-bold text-sm truncate">{stats.longestService?.name}</div>
+          <div className="text-blue-300 text-lg font-bold">
             {stats.longestService ? stats.longestService.endYear - stats.longestService.startYear : 0} jaar
-          </div>
-          <div className="text-slate-400 text-xs mt-1">
-            {stats.longestService?.startYear} - {stats.longestService?.endYear}
           </div>
         </div>
 
         {/* Largest fleet */}
-        <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 rounded-lg p-4 border border-orange-500/30">
-          <div className="text-orange-400 text-xs font-semibold mb-1">Grootste vloot</div>
-          <div className="text-white font-bold text-lg">{stats.largestFleet?.name}</div>
-          <div className="text-orange-300 text-2xl font-bold">
+        <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 rounded-lg p-2 border border-orange-500/30">
+          <div className="text-orange-400 text-[10px] font-semibold">Grootste vloot</div>
+          <div className="text-white font-bold text-sm truncate">{stats.largestFleet?.name}</div>
+          <div className="text-orange-300 text-lg font-bold">
             {stats.largestFleet?.totalCount} stuks
-          </div>
-          <div className="text-slate-400 text-xs mt-1">
-            {getUserAbbr(stats.largestFleet?.user || '')}
           </div>
         </div>
 
         {/* Average service */}
-        <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-lg p-4 border border-purple-500/30">
-          <div className="text-purple-400 text-xs font-semibold mb-1">Gemiddelde diensttijd</div>
-          <div className="text-purple-300 text-3xl font-bold">
-            {stats.avgServiceYears.toFixed(1)}
+        <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-lg p-2 border border-purple-500/30">
+          <div className="text-purple-400 text-[10px] font-semibold">Gem. diensttijd</div>
+          <div className="text-purple-300 text-lg font-bold">
+            {stats.avgServiceYears.toFixed(1)} jaar
           </div>
-          <div className="text-slate-400 text-xs mt-1">
-            jaar per vliegtuigtype
-          </div>
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-500">
-        <div className="flex items-center gap-2">
-          <Circle className="w-3 h-3 text-slate-400" />
-          <span>Kleine bubble = weinig vliegtuigen</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Circle className="w-6 h-6 text-slate-400" />
-          <span>Grote bubble = veel vliegtuigen</span>
+          <div className="text-slate-400 text-[10px]">per type</div>
         </div>
       </div>
     </div>

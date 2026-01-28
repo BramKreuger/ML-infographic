@@ -63,8 +63,8 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
       total: number;
     }> = [];
 
-    // Generate data for each year from 1817 to 2025
-    for (let year = 1817; year <= 2025; year++) {
+    // Generate data for each year from 1917 to 2025
+    for (let year = 1917; year <= 2025; year++) {
       const activeByService: Record<string, number> = {
         'KLu': 0,
         'MLD': 0,
@@ -168,32 +168,26 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
   };
 
   return (
-    <div className="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700 p-6">
+    <div className="h-full bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700 p-4 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-blue-400" />
-            Vlootsterkte door de Tijd
-          </h2>
-          <p className="text-slate-400 text-sm mt-1">
-            Gestapelde weergave van actieve vliegtuigen per dienst
-          </p>
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-blue-400" />
+          <h2 className="text-lg font-bold text-white">Vlootsterkte door de Tijd</h2>
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400 text-sm">Toon:</span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setChartMode('types')}
-              className={`px-3 py-1 rounded text-sm ${chartMode === 'types' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+              className={`px-2 py-1 rounded text-xs ${chartMode === 'types' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
             >
               Types
             </button>
             <button
               onClick={() => setChartMode('count')}
-              className={`px-3 py-1 rounded text-sm ${chartMode === 'count' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+              className={`px-2 py-1 rounded text-xs ${chartMode === 'count' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
             >
               Aantallen
             </button>
@@ -201,39 +195,40 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
 
           <button
             onClick={() => setShowEvents(prev => !prev)}
-            className={`px-3 py-1 rounded text-sm ${showEvents ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+            className={`px-2 py-1 rounded text-xs ${showEvents ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
           >
-            Gebeurtenissen
+            Events
           </button>
+
+          {/* Service Toggle - compact */}
+          <div className="flex gap-1">
+            {Object.entries(SERVICE_COLORS).map(([service, color]) => (
+              <button
+                key={service}
+                onClick={() => toggleService(service)}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-all ${
+                  selectedServices.includes(service)
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-slate-900 text-slate-500'
+                }`}
+                title={service}
+              >
+                <div
+                  className="w-2 h-2 rounded"
+                  style={{
+                    backgroundColor: color,
+                    opacity: selectedServices.includes(service) ? 1 : 0.3
+                  }}
+                />
+                <span className="hidden lg:inline">{service}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Service Toggle */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {Object.entries(SERVICE_COLORS).map(([service, color]) => (
-          <button
-            key={service}
-            onClick={() => toggleService(service)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${
-              selectedServices.includes(service)
-                ? 'bg-slate-700 text-white'
-                : 'bg-slate-900 text-slate-500'
-            }`}
-          >
-            <div
-              className="w-3 h-3 rounded"
-              style={{
-                backgroundColor: color,
-                opacity: selectedServices.includes(service) ? 1 : 0.3
-              }}
-            />
-            {service}
-          </button>
-        ))}
-      </div>
-
       {/* Chart */}
-      <div className="h-[400px]">
+      <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={chartData}
@@ -355,36 +350,31 @@ const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-        <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
-          <div className="text-slate-400 text-xs mb-1">Piek jaar</div>
-          <div className="text-2xl font-bold text-blue-400">
+      <div className="grid grid-cols-4 gap-2 mt-3 flex-shrink-0">
+        <div className="bg-slate-900/50 rounded-lg p-2 border border-slate-700">
+          <div className="text-slate-400 text-[10px]">Piek jaar</div>
+          <div className="text-lg font-bold text-blue-400">
             {chartMode === 'types' ? peakStats.maxTypesYear : peakStats.maxCountYear}
           </div>
         </div>
-        <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
-          <div className="text-slate-400 text-xs mb-1">Maximum {chartMode === 'types' ? 'types' : 'vliegtuigen'}</div>
-          <div className="text-2xl font-bold text-orange-400">
+        <div className="bg-slate-900/50 rounded-lg p-2 border border-slate-700">
+          <div className="text-slate-400 text-[10px]">Max {chartMode === 'types' ? 'types' : 'vliegtuigen'}</div>
+          <div className="text-lg font-bold text-orange-400">
             {chartMode === 'types' ? peakStats.maxTypes : peakStats.maxCount}
           </div>
         </div>
-        <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
-          <div className="text-slate-400 text-xs mb-1">Huidige vloot (2025)</div>
-          <div className="text-2xl font-bold text-green-400">
+        <div className="bg-slate-900/50 rounded-lg p-2 border border-slate-700">
+          <div className="text-slate-400 text-[10px]">Huidig (2025)</div>
+          <div className="text-lg font-bold text-green-400">
             {chartData.find(d => d.year === 2025)?.total || 0}
           </div>
         </div>
-        <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
-          <div className="text-slate-400 text-xs mb-1">Totaal ooit actief</div>
-          <div className="text-2xl font-bold text-purple-400">
+        <div className="bg-slate-900/50 rounded-lg p-2 border border-slate-700">
+          <div className="text-slate-400 text-[10px]">Totaal ooit</div>
+          <div className="text-lg font-bold text-purple-400">
             {aircraftData.length}
           </div>
         </div>
-      </div>
-
-      {/* Legend info */}
-      <div className="mt-4 text-center text-xs text-slate-500">
-        Klik op diensten om ze te tonen/verbergen. Hover over de grafiek voor details.
       </div>
     </div>
   );

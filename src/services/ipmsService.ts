@@ -211,7 +211,7 @@ Geef je antwoord als JSON met deze structuur:
         }
       ],
       response_format: { type: "json_object" },
-      max_tokens: parseInt(import.meta.env.VITE_OPENAI_MAX_TOKENS) || 2000,
+      max_completion_tokens: parseInt(import.meta.env.VITE_OPENAI_MAX_TOKENS) || 2000,
     });
 
     const content = response.choices[0].message.content;
