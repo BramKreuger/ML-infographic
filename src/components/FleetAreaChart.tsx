@@ -47,7 +47,7 @@ const getUserAbbr = (user: string): string => {
 
 const FleetAreaChart: React.FC<FleetAreaChartProps> = ({ aircraftData }) => {
   const [showEvents, setShowEvents] = useState(true);
-  const [chartMode, setChartMode] = useState<'types' | 'count'>('types');
+  const [chartMode, setChartMode] = useState<'types' | 'count'>('count');
   const [selectedServices, setSelectedServices] = useState<string[]>(['KLu', 'MLD', 'MLKNIL', 'LVA', 'LSK', 'Overig']);
 
   // Generate time series data
