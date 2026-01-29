@@ -1082,12 +1082,18 @@ const AircraftTimeline = () => {
         onMouseEnter={() => setIsFooterExpanded(true)}
         onMouseLeave={() => setIsFooterExpanded(false)}
       >
-        {/* Collapsed state - thin bar with hint */}
+        {/* Collapsed state - thin bar with hint and credits */}
         {!isFooterExpanded && (
-          <div className="h-6 flex items-center justify-center cursor-pointer">
+          <div className="h-6 flex items-center justify-between px-4 cursor-pointer">
             <div className="flex items-center gap-2 text-slate-400 text-xs">
               <Info className="w-3 h-3" />
               <span>Hover voor legenda & overzicht</span>
+            </div>
+            <div className="text-xs text-slate-400">
+              Door:{' '}
+              <a href="https://www.linkedin.com/in/bram-kreuger-6ab96a160/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Bram Kreuger</a>
+              {' '}& <a href="https://www.linkedin.com/in/baskreuger/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Bas Kreuger</a>
+              {' '}| <a href="https://www.cultureelerfgoed.nl/" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">RCE</a>
             </div>
           </div>
         )}
@@ -1229,6 +1235,16 @@ const AircraftTimeline = () => {
                 </div>
               </div>
             </div>
+
+            {/* Credits in expanded state */}
+            <div className="mt-4 pt-3 border-t border-slate-700 text-center text-xs text-slate-400">
+              Website gebouwd door:{' '}
+              <a href="https://www.linkedin.com/in/bram-kreuger-6ab96a160/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Bram Kreuger</a>
+              {' '}| Onderzoek en data verzameling door:{' '}
+              <a href="https://www.linkedin.com/in/baskreuger/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Bas Kreuger</a>
+              {' '}| In opdracht van de{' '}
+              <a href="https://www.cultureelerfgoed.nl/" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300">RCE</a>
+            </div>
           </div>
         )}
       </div>
@@ -1251,6 +1267,22 @@ const AircraftTimeline = () => {
           />
         </div>
       )}
+
+      {/* Credits Footer */}
+      <div className="flex-shrink-0 bg-slate-900/95 border-t border-slate-700 py-2 px-4 text-center text-xs text-slate-400">
+        Website gebouwd door:{' '}
+        <a href="https://www.linkedin.com/in/bram-kreuger-6ab96a160/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline">
+          Bram Kreuger
+        </a>
+        {' '}| Onderzoek en data verzameling door:{' '}
+        <a href="https://www.linkedin.com/in/baskreuger/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline">
+          Bas Kreuger
+        </a>
+        {' '}| In opdracht van de{' '}
+        <a href="https://www.cultureelerfgoed.nl/" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 hover:underline">
+          RCE
+        </a>
+      </div>
 
       {/* Aircraft Info Panel */}
       {selectedAircraft && (
